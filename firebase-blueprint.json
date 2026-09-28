@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and business settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "businessName": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 200 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "pinHash": { "type": "string", "maxLength": 128 },
+        "pinSalt": { "type": "string", "maxLength": 64 },
+        "isBiometricEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "createdAt"]
+    },
+    "Party": {
+      "title": "Party",
+      "description": "Customer or Supplier account record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "type": { "type": "string", "enum": ["customer", "supplier"] },
+        "balance": { "type": "number" },
+        "address": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "name", "type", "balance", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Debit or credit khata transaction entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "partyId": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["give", "got"] },
+        "description": { "type": "string", "maxLength": 500 },
+        "date": { "type": "string", "maxLength": 64 },
+        "paymentMode": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "partyId", "amount", "type", "date", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Root user account profile and business configuration"
+    },
+    "/users/{userId}/parties/{partyId}": {
+      "schema": "Party",
+      "description": "Parties associated with this user"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial ledger transactions under this user"
+    }
+  }
+}

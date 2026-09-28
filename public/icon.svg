@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded Base -->
+  <rect width="512" height="512" rx="110" fill="url(#emeraldGrad)" />
+  <!-- Book spine / Ledger Card Shape -->
+  <rect x="96" y="86" width="320" height="340" rx="28" fill="#ffffff" opacity="0.96" />
+  <!-- Spine stripe -->
+  <path d="M96 114 C96 98 108 86 124 86 L156 86 L156 426 L124 426 C108 426 96 414 96 398 Z" fill="#059669" />
+  <!-- Rupee Symbol & Ledger Lines -->
+  <text x="280" y="230" font-family="Arial, sans-serif" font-size="100" font-weight="900" fill="#065f46" text-anchor="middle">₹</text>
+  <!-- Ledger rows -->
+  <line x1="186" y1="280" x2="380" y2="280" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round" />
+  <line x1="186" y1="320" x2="380" y2="320" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round" />
+  <line x1="186" y1="360" x2="340" y2="360" stroke="#10b981" stroke-width="12" stroke-linecap="round" />
+  <!-- Security Lock Badge -->
+  <circle cx="390" cy="115" r="44" fill="#10b981" stroke="#ffffff" stroke-width="8" />
+  <!-- Lock keyhole -->
+  <circle cx="390" cy="110" r="12" fill="#ffffff" />
+  <rect x="386" y="110" width="8" height="16" fill="#ffffff" rx="2" />
+</svg>

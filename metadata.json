@@ -1,0 +1,6 @@
+{
+  "name": "Digital Khata",
+  "description": "Aapka Khata, Aapke Control Mein. Offline-first, end-to-end encrypted digital ledger and khata book.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

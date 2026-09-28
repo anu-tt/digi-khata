@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User document validation
+    function isValidUserProfile(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 128)) &&
+             (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 100)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 200)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
+             (!('pinHash' in data) || (data.pinHash is string && data.pinHash.size() <= 128)) &&
+             (!('pinSalt' in data) || (data.pinSalt is string && data.pinSalt.size() <= 64)) &&
+             (!('isBiometricEnabled' in data) || data.isBiometricEnabled is bool);
+    }
+
+    // Party document validation
+    function isValidParty(data, userId) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId == userId &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (data.type == 'customer' || data.type == 'supplier') &&
+             data.balance is number &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 200));
+    }
+
+    // Transaction document validation
+    function isValidTransaction(data, userId) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId == userId &&
+             data.partyId is string && data.partyId.size() <= 128 &&
+             data.amount is number && data.amount >= 0 &&
+             (data.type == 'give' || data.type == 'got') &&
+             data.date is string && data.date.size() <= 64 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+             (!('paymentMode' in data) || (data.paymentMode is string && data.paymentMode.size() <= 50));
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow update: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      // Parties Subcollection
+      match /parties/{partyId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(partyId) && isValidParty(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(partyId) && isValidParty(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(partyId);
+      }
+
+      // Transactions Subcollection
+      match /transactions/{transactionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(transactionId) && isValidTransaction(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(transactionId) && isValidTransaction(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      // Vault / backup subcollection
+      match /vault/{vaultId} {
+        allow get, list: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId) && isValidId(vaultId);
+      }
+    }
+  }
+}
