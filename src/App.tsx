@@ -642,7 +642,8 @@ export function App() {
   };
 
   return (
-    <AppLayout
+    <>
+      <AppLayout
       profile={profile}
       isOnline={isOnline}
       onToggleOnline={() => setIsOnline(!isOnline)}
@@ -656,6 +657,12 @@ export function App() {
       {/* 1. ADMIN ROUTE: Rendered ONLY if URL matches /ad-min */}
       {isAdminRoute ? (
         <WebAdminPortal onBackToApp={handleExitAdmin} />
+      ) : isAuthModalOpen ? (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onSuccess={handleAuthSuccess}
+          onContinueOffline={handleContinueOffline}
+        />
       ) : isLocked && profile ? (
         /* Lock Screen with 6-Digit PIN & Security Question Recovery */
         <LockScreen
@@ -955,87 +962,81 @@ export function App() {
               </>
             )}
           </div>
-
-          {/* ======================================================== */}
-          {/* GLOBAL MODALS                                            */}
-          {/* ======================================================== */}
-
-          {/* 1. Onboarding & Firebase Auth Modal */}
-          <AuthModal
-            isOpen={isAuthModalOpen}
-            onSuccess={handleAuthSuccess}
-            onContinueOffline={handleContinueOffline}
-          />
-
-          {/* 2. On App Opening 6-Digit PIN Creation Modal */}
-          {profile && (
-            <CreatePinModal
-              isOpen={isCreatePinOpen}
-              profile={profile}
-              onPinCreated={handlePinCreated}
-              onSkip={() => setIsCreatePinOpen(false)}
-            />
-          )}
-
-          <AddPartyModal
-            isOpen={isAddPartyOpen}
-            type={addPartyType}
-            onClose={() => setIsAddPartyOpen(false)}
-            onSave={handleSaveParty}
-          />
-
-          <AddEntryModal
-            isOpen={isAddEntryOpen}
-            parties={parties}
-            defaultPartyId={addEntryPartyId}
-            defaultType={addEntryDefaultType}
-            onClose={() => setIsAddEntryOpen(false)}
-            onSave={handleSaveEntry}
-          />
-
-          <TransactionDetailModal
-            entry={selectedEntryDetail}
-            parties={parties}
-            onClose={() => setSelectedEntryDetail(null)}
-            onDeleteEntry={handleDeleteEntry}
-          />
-
-          {profile && (
-            <PDFModal
-              isOpen={isPDFModalOpen}
-              parties={parties}
-              entries={entries}
-              profile={profile}
-              initialPartyId={pdfPartyId}
-              onClose={() => setIsPDFModalOpen(false)}
-            />
-          )}
-
-          {/* Popup Reminder modal when adding directly from party/desktop */}
-          <RemindersModal
-            isOpen={isRemindersModalOpen}
-            parties={parties}
-            reminders={reminders}
-            initialParty={reminderInitialParty}
-            onClose={() => setIsRemindersModalOpen(false)}
-            onAddReminder={handleAddReminder}
-            onToggleComplete={handleToggleReminderComplete}
-            onDeleteReminder={handleDeleteReminder}
-          />
-
-          {/* 3. Delete Account & Refresh Database Confirmation Modal */}
-          <DeleteAccountModal
-            isOpen={isDeleteAccountOpen}
-            profile={profile}
-            onClose={() => setIsDeleteAccountOpen(false)}
-            onConfirmDelete={handleExecuteDeleteAccount}
-          />
-
-          {/* Action Notification Toast */}
-          <ActionToast toast={toast} onDismiss={() => setToast(null)} />
         </div>
       )}
     </AppLayout>
+
+    {/* ======================================================== */}
+    {/* GLOBAL MODALS (Root level - rendered above all layouts) */}
+    {/* ======================================================== */}
+
+    {/* 2. On App Opening 6-Digit PIN Creation Modal */}
+    {profile && (
+      <CreatePinModal
+        isOpen={isCreatePinOpen}
+        profile={profile}
+        onPinCreated={handlePinCreated}
+        onSkip={() => setIsCreatePinOpen(false)}
+      />
+    )}
+
+    <AddPartyModal
+      isOpen={isAddPartyOpen}
+      type={addPartyType}
+      onClose={() => setIsAddPartyOpen(false)}
+      onSave={handleSaveParty}
+    />
+
+    <AddEntryModal
+      isOpen={isAddEntryOpen}
+      parties={parties}
+      defaultPartyId={addEntryPartyId}
+      defaultType={addEntryDefaultType}
+      onClose={() => setIsAddEntryOpen(false)}
+      onSave={handleSaveEntry}
+    />
+
+    <TransactionDetailModal
+      entry={selectedEntryDetail}
+      parties={parties}
+      onClose={() => setSelectedEntryDetail(null)}
+      onDeleteEntry={handleDeleteEntry}
+    />
+
+    {profile && (
+      <PDFModal
+        isOpen={isPDFModalOpen}
+        parties={parties}
+        entries={entries}
+        profile={profile}
+        initialPartyId={pdfPartyId}
+        onClose={() => setIsPDFModalOpen(false)}
+      />
+    )}
+
+    {/* Popup Reminder modal when adding directly from party/desktop */}
+    <RemindersModal
+      isOpen={isRemindersModalOpen}
+      parties={parties}
+      reminders={reminders}
+      initialParty={reminderInitialParty}
+      onClose={() => setIsRemindersModalOpen(false)}
+      onAddReminder={handleAddReminder}
+      onToggleComplete={handleToggleReminderComplete}
+      onDeleteReminder={handleDeleteReminder}
+    />
+
+    {/* 3. Delete Account & Refresh Database Confirmation Modal */}
+    <DeleteAccountModal
+      isOpen={isDeleteAccountOpen}
+      profile={profile}
+      onClose={() => setIsDeleteAccountOpen(false)}
+      onConfirmDelete={handleExecuteDeleteAccount}
+    />
+
+    {/* Action Notification Toast */}
+    <ActionToast toast={toast} onDismiss={() => setToast(null)} />
+    </>
   );
 }
 

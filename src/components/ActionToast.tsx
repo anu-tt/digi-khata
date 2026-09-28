@@ -52,7 +52,7 @@ export const ActionToast: React.FC<ActionToastProps> = ({ toast, onDismiss }) =>
   const style = getStyle();
 
   return (
-    <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[90] max-w-sm w-[90%] pointer-events-auto select-none animate-slide-down">
+    <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[120] max-w-sm w-[90%] pointer-events-auto select-none animate-slide-down">
       <div
         className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border shadow-xl backdrop-blur-md text-xs font-bold ${style.bg}`}
       >

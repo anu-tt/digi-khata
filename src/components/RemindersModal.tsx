@@ -56,8 +56,8 @@ export const RemindersModal: React.FC<RemindersModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-white text-slate-800 w-full sm:max-w-sm h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-scale-in">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white text-slate-800 w-full max-w-sm my-auto max-h-[92vh] rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-scale-in">
         {/* Header */}
         <div className="bg-emerald-800 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">

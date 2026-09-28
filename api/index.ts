@@ -1,14 +1,17 @@
 import express, { Request, Response, NextFunction } from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
 import crypto from 'crypto';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (_req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 app.use(express.json({ limit: '25mb' }));
 
@@ -84,7 +87,6 @@ interface ActiveGmailCode {
   codeHash: string;
   expiresAt: number;
   attempts: number;
-  // Delivery log for real-time sandbox notifications
   deliveredAt: string;
 }
 
@@ -107,20 +109,17 @@ interface ServerAuditLog {
 }
 
 // Global Stores
-const userDatabase = new Map<string, ServerUserRecord>(); // Keyed by normalized email or userId
-const activeSessions = new Map<string, ActiveSession>(); // Cryptographic session tokens
-const activeGmailCodes = new Map<string, ActiveGmailCode>(); // Keyed by email
+const userDatabase = new Map<string, ServerUserRecord>();
+const activeSessions = new Map<string, ActiveSession>();
+const activeGmailCodes = new Map<string, ActiveGmailCode>();
 const recentVerificationDeliveries = new Map<string, { codePreview: string; timestamp: number }>();
 const auditLogs: ServerAuditLog[] = [];
 const startTime = Date.now();
 
-// Sanitization & Security Helpers
+// Helpers
 function sanitizeString(str?: string): string {
   if (!str) return '';
-  return str
-    .replace(/[<>]/g, '')
-    .trim()
-    .slice(0, 100);
+  return str.replace(/[<>]/g, '').trim().slice(0, 100);
 }
 
 function normalizeEmail(email: string): string {
@@ -156,7 +155,7 @@ function logAudit(
   }
 }
 
-// Auth Middleware to protect APIs
+// Auth Middleware
 function authenticateUser(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
@@ -188,7 +187,6 @@ function authenticateUser(req: Request, res: Response, next: NextFunction) {
 
 // --- REAL-TIME GMAIL AUTH API ROUTES ---
 
-// 1. Send Real-Time Gmail Verification Code
 app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
   const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || '127.0.0.1';
   const { email } = req.body;
@@ -198,14 +196,11 @@ app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
   }
 
   const cleanEmail = normalizeEmail(email);
-
-  // Strict Email format check
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(cleanEmail)) {
     return res.status(400).json({ error: 'Kripya valid Gmail address dalein (jaise naam@gmail.com).' });
   }
 
-  // Rate Limiting: Max 5 code requests per email per 10 minutes, Max 10 per IP
   const emailLimit = checkRateLimit(emailRateLimits, cleanEmail, 5, 10 * 60 * 1000);
   if (!emailLimit.allowed) {
     return res.status(429).json({
@@ -218,25 +213,22 @@ app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
     return res.status(429).json({ error: 'Too many requests. Thodi der baad try karein.' });
   }
 
-  // Generate cryptographically secure 6-digit code
   const code = crypto.randomInt(100000, 999999).toString();
   const codeHash = hashVerificationCode(code);
 
   activeGmailCodes.set(cleanEmail, {
     email: cleanEmail,
     codeHash,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 min expiry
+    expiresAt: Date.now() + 5 * 60 * 1000,
     attempts: 0,
     deliveredAt: new Date().toISOString(),
   });
 
-  // Store delivery notice for real-time in-app notification in preview environment
   recentVerificationDeliveries.set(cleanEmail, {
     codePreview: code,
     timestamp: Date.now(),
   });
 
-  // CRITICAL: We NEVER leak devOtp directly in the response payload.
   return res.json({
     success: true,
     message: `Verification code aapke Gmail (${cleanEmail}) par bhej diya gaya hai.`,
@@ -245,7 +237,6 @@ app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
   });
 });
 
-// Realtime Verification Dispatch Check (allows frontend toast notification of incoming verification)
 app.get('/api/auth/realtime-delivery-check', (req: Request, res: Response) => {
   const email = req.query.email as string;
   if (!email) return res.status(400).json({ error: 'Email required' });
@@ -258,7 +249,6 @@ app.get('/api/auth/realtime-delivery-check', (req: Request, res: Response) => {
       delivered: true,
       service: 'Google Mail Dispatcher',
       notice: `Gmail verification code sent to ${cleanEmail}`,
-      // Provided for immediate sandbox testing without SMTP credentials configured
       verificationCode: delivery.codePreview,
     });
   }
@@ -266,7 +256,6 @@ app.get('/api/auth/realtime-delivery-check', (req: Request, res: Response) => {
   return res.json({ delivered: false });
 });
 
-// 2. Verify Gmail Code & Sign In
 app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
   const { email, code, name, businessName, deviceName, platform } = req.body;
 
@@ -286,7 +275,6 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Verification code expire ho gaya. Kripya naya code mangwayein.' });
   }
 
-  // Prevent brute force guessing of the 6-digit code: max 4 attempts
   activeCode.attempts++;
   if (activeCode.attempts > 4) {
     activeGmailCodes.delete(cleanEmail);
@@ -298,11 +286,9 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Galat verification code. Kripya dhyan se enter karein.' });
   }
 
-  // Code verified! Remove it so it cannot be re-used
   activeGmailCodes.delete(cleanEmail);
   recentVerificationDeliveries.delete(cleanEmail);
 
-  // Look up or create user account
   let user = userDatabase.get(cleanEmail);
   const deviceId = 'dev_' + crypto.randomBytes(6).toString('hex');
   const currentDevice = {
@@ -333,13 +319,12 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
     logAudit(user.id, 'GMAIL_VERIFIED', platform || 'mobile', req.ip || '127.0.0.1');
   }
 
-  // Generate cryptographically secure random session token
   const sessionToken = generateSecureSessionToken();
   activeSessions.set(sessionToken, {
     userId: user.id,
     role: 'USER',
     createdAt: Date.now(),
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
   });
 
   return res.json({
@@ -356,7 +341,6 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
   });
 });
 
-// 3. One-Click Google Sign-In (Token Exchange)
 app.post('/api/auth/google-signin', (req: Request, res: Response) => {
   const { credential, email, name, avatar, businessName, deviceName, platform } = req.body;
 
@@ -368,7 +352,6 @@ app.post('/api/auth/google-signin', (req: Request, res: Response) => {
   let verifiedName = '';
   let verifiedAvatar = avatar || '';
 
-  // Decode Google JWT credential if passed from Google Identity Services
   if (credential && typeof credential === 'string') {
     try {
       const parts = credential.split('.');
@@ -447,9 +430,6 @@ app.post('/api/auth/google-signin', (req: Request, res: Response) => {
   });
 });
 
-// --- CLOUD SYNC API ROUTES (Protected) ---
-
-// 4. Push Encrypted Vault
 app.post('/api/sync/push', authenticateUser, (req: Request, res: Response) => {
   const { email, deviceId, encryptedPayload, approximateBytes, totalEntriesCount } = req.body;
 
@@ -463,13 +443,11 @@ app.post('/api/sync/push', authenticateUser, (req: Request, res: Response) => {
     return res.status(404).json({ error: 'User account nahi mila.' });
   }
 
-  // Update device active timestamp
   const dev = user.devices.find((d) => d.id === deviceId);
   if (dev) {
     dev.lastActive = new Date().toISOString();
   }
 
-  // Store ONLY encrypted ciphertext package
   user.encryptedVault = {
     ciphertext: encryptedPayload.ciphertext,
     iv: encryptedPayload.iv,
@@ -490,7 +468,6 @@ app.post('/api/sync/push', authenticateUser, (req: Request, res: Response) => {
   });
 });
 
-// 5. Pull Encrypted Vault
 app.get('/api/sync/pull', authenticateUser, (req: Request, res: Response) => {
   const email = req.query.email as string;
   if (!email) {
@@ -516,7 +493,6 @@ app.get('/api/sync/pull', authenticateUser, (req: Request, res: Response) => {
   });
 });
 
-// 6. Device Management (Protected)
 app.get('/api/devices', authenticateUser, (req: Request, res: Response) => {
   const email = req.query.email as string;
   if (!email) return res.status(400).json({ error: 'Email parameter required.' });
@@ -541,12 +517,9 @@ app.delete('/api/devices/:id', authenticateUser, (req: Request, res: Response) =
   return res.json({ success: true, message: 'Device revoke ho gaya.' });
 });
 
-// --- WEB ADMIN API ROUTES (/ad-min with Rate Limiting) ---
-
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || '127.0.0.1';
 
-  // Rate Limiting: Max 5 admin login attempts per IP per 10 minutes
   const limit = checkRateLimit(ipRateLimits, 'admin_' + clientIp, 5, 10 * 60 * 1000);
   if (!limit.allowed) {
     return res.status(429).json({
@@ -557,14 +530,13 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   const { username, email, password } = req.body;
   const inputEmail = (email || username || '').trim().toLowerCase();
 
-  // Strict required credentials: email: admin@digitalkhata.in, pass: Admin@2026
   if (inputEmail === 'admin@digitalkhata.in' && password === 'Admin@2026') {
     const adminToken = generateSecureSessionToken();
     activeSessions.set(adminToken, {
       userId: 'admin_root',
       role: 'SUPER_ADMIN',
       createdAt: Date.now(),
-      expiresAt: Date.now() + 12 * 60 * 60 * 1000, // 12 hours
+      expiresAt: Date.now() + 12 * 60 * 60 * 1000,
     });
 
     return res.json({
@@ -617,33 +589,5 @@ app.get('/api/admin/audit-logs', (_req: Request, res: Response) => {
   return res.json({ logs: auditLogs.slice(0, 50) });
 });
 
-// --- SERVER SETUP & VITE MIDDLEWARE ---
-
-async function startServer() {
-  const isDev = process.env.NODE_ENV !== 'production';
-
-  if (isDev) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(__dirname, 'dist');
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get('*', (_req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
-      });
-    }
-  }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Digital Khata Hardened Server running on port ${PORT}`);
-  });
-}
-
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-});
+// Export default handler for Vercel Serverless Functions
+export default app;

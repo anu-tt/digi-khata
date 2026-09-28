@@ -75,8 +75,8 @@ export const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[90] flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-md h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl border border-rose-200 overflow-hidden text-slate-800 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-md my-auto max-h-[92vh] rounded-3xl shadow-2xl border border-rose-200 overflow-hidden text-slate-800 flex flex-col animate-scale-in">
         {/* Header */}
         <div className="bg-gradient-to-r from-rose-900 to-rose-950 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">

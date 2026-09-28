@@ -106,8 +106,8 @@ export const CreatePinModal: React.FC<CreatePinModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[80] flex items-center justify-center p-0 sm:p-4 select-none">
-      <div className="bg-slate-900 border-0 sm:border border-emerald-900/60 w-full sm:max-w-md h-full sm:h-auto sm:max-h-[95vh] sm:rounded-3xl p-6 text-white shadow-2xl flex flex-col items-center justify-between sm:justify-center overflow-y-auto animate-scale-in">
+    <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] flex items-center justify-center p-3 sm:p-4 select-none overflow-y-auto">
+      <div className="bg-slate-900 border border-emerald-900/60 w-full max-w-md my-auto max-h-[94vh] rounded-3xl p-6 text-white shadow-2xl flex flex-col items-center justify-between sm:justify-center overflow-y-auto animate-scale-in">
         {/* Shield Medallion */}
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg border border-emerald-400/40 mb-3 shrink-0">
           <Lock className="w-7 h-7 text-white" />

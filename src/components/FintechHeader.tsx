@@ -122,7 +122,7 @@ export const FintechHeader: React.FC<FintechHeaderProps> = ({
             onClick={onTriggerSync}
             disabled={!isOnline || syncState === 'syncing'}
             className={`h-8 px-2 sm:px-2.5 sm:h-auto sm:py-1.5 rounded-xl border text-xs font-semibold ${syncBadge.color} transition shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5`}
-            title="Firebase Firestore Cloud Sync Now"
+            title="Secure Cloud Sync Now"
           >
             {syncBadge.icon}
             <span className="hidden sm:inline text-xs">{syncBadge.text}</span>

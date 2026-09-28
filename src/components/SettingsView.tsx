@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, SECURITY_QUESTIONS } from '../types/khata';
 import { hashPIN, generateSalt } from '../lib/crypto';
+import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 
 interface SettingsViewProps {
   profile: UserProfile;
@@ -39,10 +40,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onDeleteAccount,
   onLogout,
 }) => {
-  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync'>('menu');
+  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync' | 'help'>('menu');
   const [name, setName] = useState(profile.name);
   const [businessName, setBusinessName] = useState(profile.businessName || '');
   const [address, setAddress] = useState(profile.address || '');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   // 6-Digit PIN & Security Question settings
   const [newPin, setNewPin] = useState('');
@@ -63,12 +68,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (newPassword && newPassword.length < 4) {
+      setPasswordError('Password kam se kam 4 ank ka hona chahiye.');
+      return;
+    }
+    if (newPassword && newPassword !== confirmNewPassword) {
+      setPasswordError('Dono password match nahi ho rahe.');
+      return;
+    }
+
     onUpdateProfile({
       name: name.trim(),
       businessName: businessName.trim() || undefined,
       address: address.trim() || undefined,
     });
-    setActiveSection('menu');
+
+    if (newPassword) {
+      setPasswordSuccess(true);
+      setPasswordError('');
+      setTimeout(() => {
+        setPasswordSuccess(false);
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setActiveSection('menu');
+      }, 800);
+    } else {
+      setActiveSection('menu');
+    }
   };
 
   const handleSetPIN = async (e: React.FormEvent) => {
@@ -188,6 +215,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {activeSection === 'profile' && 'Profile Edit'}
                 {activeSection === 'security' && 'App Lock & 6-Digit PIN'}
                 {activeSection === 'sync' && 'Firebase Cloud Database'}
+                {activeSection === 'help' && 'Help, About & T&C'}
               </h1>
               <div className="text-[11px] text-emerald-200 truncate max-w-[220px]">
                 {profile.businessName || profile.name} • {profile.email || 'Verified Account'}
@@ -264,7 +292,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                   <span>Verified Account</span>
                   <span className="text-[9px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
-                    Firebase
+                    Cloud
                   </span>
                 </div>
                 <div className="text-xs text-emerald-800 truncate mt-0.5">
@@ -272,6 +300,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Help, About & T&C Card */}
+            <button
+              onClick={() => setActiveSection('help')}
+              className="w-full p-4 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200/80 rounded-2xl flex items-center justify-between transition text-left shadow-sm"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center shrink-0">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">Help, About & T&C</div>
+                  <div className="text-xs text-slate-500">Jankari, Sahayata aur Data Download</div>
+                </div>
+              </div>
+              <span className="text-slate-400 font-bold text-base">›</span>
+            </button>
 
             {/* Action Buttons */}
             <div className="pt-2 space-y-2.5">
@@ -282,15 +327,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               >
                 <LogOut className="w-4 h-4" />
                 <span>Logout Karein</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onDeleteAccount}
-                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition border border-rose-200/80 active:scale-[0.99]"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Account & Refresh Database</span>
               </button>
             </div>
           </div>
@@ -337,6 +373,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
               />
             </div>
+
+            {passwordError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold">
+                {passwordError}
+              </div>
+            )}
+            {passwordSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <span>Password safalta-purvak badal gaya hai!</span>
+              </div>
+            )}
+
+            <div className="border-t border-slate-100 pt-3">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Naya Password Badlein (Optional)</label>
+              <div className="relative flex items-center">
+                <Lock className="absolute left-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            {newPassword && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Naya Password Dobara Dalein (Confirm)</label>
+                <div className="relative flex items-center">
+                  <Lock className="absolute left-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
+                  />
+                </div>
+                <PasswordStrengthIndicator
+                  password={newPassword}
+                  confirmPassword={confirmNewPassword}
+                />
+              </div>
+            )}
 
             <div className="pt-2 flex gap-2">
               <button
@@ -550,6 +632,72 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Download className="w-4 h-4" />
               <span>Download Offline Backup JSON</span>
             </button>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveSection('menu')}
+                className="w-full py-2.5 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50"
+              >
+                ‹ Back to Settings Menu
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Help, About & T&C */}
+        {activeSection === 'help' && (
+          <div className="space-y-4">
+            {/* About Card */}
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-2">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-emerald-700" />
+                About Digital Khata
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Digital Khata aapka trusted, secure aur fast vyapar ledger hai jisse aap apne len-den aur hisab-kitab asani se manage kar sakte hain.
+              </p>
+            </div>
+
+            {/* Terms & Conditions */}
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-2">
+              <h3 className="text-sm font-bold text-slate-900">Terms & Conditions (T&C)</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Aapka sara data encrypt karke cloud par safe rakha jata hai. Kisi bhi third-party ko data share nahi kiya jata.
+              </p>
+            </div>
+
+            {/* Data Download Button */}
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-slate-900">Data Download</h3>
+              <p className="text-xs text-slate-600">
+                Aap apne khate ka poora data JSON format mein download kar sakte hain.
+              </p>
+              <button
+                type="button"
+                onClick={onExportLocalData}
+                className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+              >
+                <Download className="w-4 h-4" />
+                <span>Data Download Karein (JSON Backup)</span>
+              </button>
+            </div>
+
+            {/* Help & Account Deletion */}
+            <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-2xl shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-rose-950">Account Deletion (Khata Delete Karein)</h3>
+              <p className="text-xs text-rose-800 leading-relaxed">
+                Agar aap apna account aur sara data permanent delete karna chahte hain, toh niche diye gaye button par click karein. Yeh action irreversible hai.
+              </p>
+              <button
+                type="button"
+                onClick={onDeleteAccount}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Account Delete Karein</span>
+              </button>
+            </div>
 
             <div className="pt-2">
               <button
