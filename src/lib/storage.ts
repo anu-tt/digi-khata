@@ -102,6 +102,16 @@ export async function saveStoredProfile(profile: UserProfile): Promise<void> {
   await performTx('profile', 'readwrite', (store) => store.put(profile));
 }
 
+export async function clearStoredProfile(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('profile', 'readwrite');
+  tx.objectStore('profile').clear();
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // Parties (Customers & Suppliers) Operations
 export async function getAllParties(type?: 'customer' | 'supplier'): Promise<KhataParty[]> {
   const db = await getDB();
@@ -403,6 +413,64 @@ export async function importDecryptedVault(vault: UserDecryptedVault): Promise<v
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// Phone Storage & Persistence Operations
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persist();
+      console.log(`Persistent Phone Storage status: ${isPersisted ? 'Granted' : 'Denied'}`);
+      return isPersisted;
+    } catch (e) {
+      console.warn('Persistent storage request failed:', e);
+      return false;
+    }
+  }
+  return false;
+}
+
+export async function checkStoragePersistence(): Promise<boolean> {
+  if (navigator.storage && navigator.storage.persisted) {
+    try {
+      return await navigator.storage.persisted();
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export async function getStorageEstimate(): Promise<{
+  usageMB: number;
+  quotaMB: number;
+  percentUsed: number;
+  isPersisted: boolean;
+}> {
+  let usageMB = 0;
+  let quotaMB = 0;
+  let percentUsed = 0;
+  let isPersisted = false;
+
+  if (navigator.storage) {
+    if (navigator.storage.persisted) {
+      try {
+        isPersisted = await navigator.storage.persisted();
+      } catch {}
+    }
+    if (navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        usageMB = parseFloat(((estimate.usage || 0) / (1024 * 1024)).toFixed(2));
+        quotaMB = parseFloat(((estimate.quota || 0) / (1024 * 1024)).toFixed(0));
+        if (quotaMB > 0) {
+          percentUsed = parseFloat(((usageMB / quotaMB) * 100).toFixed(2));
+        }
+      } catch {}
+    }
+  }
+
+  return { usageMB, quotaMB, percentUsed, isPersisted };
 }
 
 // Completely wipe local database

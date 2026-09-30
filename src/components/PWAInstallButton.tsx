@@ -3,7 +3,7 @@ import { Download, Smartphone, X, CheckCircle } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
-  variant?: 'header' | 'banner' | 'settings';
+  variant?: 'header' | 'banner' | 'settings' | 'auth';
 }
 
 export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'header' }) => {
@@ -11,13 +11,13 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
 
-  // If already installed, don't show prompt or show installed badge in settings
+  // If already installed, don't show prompt or show installed badge in settings/auth
   if (isInstalled) {
-    if (variant === 'settings') {
+    if (variant === 'settings' || variant === 'auth') {
       return (
-        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 font-medium">
-          <CheckCircle className="w-4 h-4 text-emerald-600" />
-          <span>App Installed — Phone par standalone chal rahi hai</span>
+        <div className="w-full mt-1 py-2 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 text-center">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>App Installed — Home screen par tayar hai</span>
         </div>
       );
     }
@@ -91,6 +91,17 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
           <span className="text-xs font-bold text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
             Install
           </span>
+        </button>
+      )}
+
+      {variant === 'auth' && (
+        <button
+          type="button"
+          onClick={handleInstallClick}
+          className="w-full mt-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-md active:scale-95"
+        >
+          <Smartphone className="w-4 h-4 text-emerald-200 shrink-0" />
+          <span>Phone Par App Install Karein (PWA)</span>
         </button>
       )}
 

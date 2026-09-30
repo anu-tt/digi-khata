@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Shield,
@@ -14,10 +14,19 @@ import {
   ArrowLeft,
   Database,
   HelpCircle,
+  HardDrive,
+  Smartphone,
+  Upload,
+  ShieldCheck,
 } from 'lucide-react';
 import { UserProfile, SECURITY_QUESTIONS } from '../types/khata';
 import { hashPIN, generateSalt } from '../lib/crypto';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import {
+  requestPersistentStorage,
+  getStorageEstimate,
+  importDecryptedVault,
+} from '../lib/storage';
 
 interface SettingsViewProps {
   profile: UserProfile;
@@ -40,7 +49,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onDeleteAccount,
   onLogout,
 }) => {
-  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync' | 'help'>('menu');
+  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync' | 'help' | 'storage'>('menu');
   const [name, setName] = useState(profile.name);
   const [businessName, setBusinessName] = useState(profile.businessName || '');
   const [address, setAddress] = useState(profile.address || '');
@@ -48,6 +57,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+
+  // Phone Storage Access State
+  const [storageInfo, setStorageInfo] = useState<{
+    usageMB: number;
+    quotaMB: number;
+    percentUsed: number;
+    isPersisted: boolean;
+  }>({ usageMB: 0, quotaMB: 0, percentUsed: 0, isPersisted: false });
+  const [isRequestingStorage, setIsRequestingStorage] = useState(false);
+  const [storageMsg, setStorageMsg] = useState('');
+
+  useEffect(() => {
+    getStorageEstimate().then((info) => setStorageInfo(info));
+  }, []);
+
+  const handleEnablePersistentStorage = async () => {
+    setIsRequestingStorage(true);
+    setStorageMsg('');
+    const granted = await requestPersistentStorage();
+    const updated = await getStorageEstimate();
+    setStorageInfo(updated);
+    setIsRequestingStorage(false);
+    if (granted || updated.isPersisted) {
+      setStorageMsg('Phone Persistent Storage Access Safalta-Purvak Mil Gaya! Mobile OS entries ko clean nahi karega.');
+    } else {
+      setStorageMsg('Storage persistence status: Standard local mode active.');
+    }
+  };
+
+  const handleImportFileFromPhone = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const vault = JSON.parse(text);
+      if (!vault || (!vault.entries && !vault.parties)) {
+        throw new Error('Amanaya backup file format.');
+      }
+      await importDecryptedVault(vault);
+      setStorageMsg('Phone storage file se data safalta-purvak restore ho gaya!');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err: any) {
+      setStorageMsg(err.message || 'File import karne mein samasya aayi.');
+    }
+  };
 
   // 6-Digit PIN & Security Question settings
   const [newPin, setNewPin] = useState('');
@@ -216,6 +272,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {activeSection === 'security' && 'App Lock & 6-Digit PIN'}
                 {activeSection === 'sync' && 'Firebase Cloud Database'}
                 {activeSection === 'help' && 'Help, About & T&C'}
+                {activeSection === 'storage' && 'Phone Storage & Local Memory'}
               </h1>
               <div className="text-[11px] text-emerald-200 truncate max-w-[220px]">
                 {profile.businessName || profile.name} • {profile.email || 'Verified Account'}
@@ -278,6 +335,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div>
                   <div className="text-sm font-bold text-slate-900">Firebase Cloud Database</div>
                   <div className="text-xs text-slate-500">Realtime Push / Pull & Cloud Backup</div>
+                </div>
+              </div>
+              <span className="text-slate-400 font-bold text-base">›</span>
+            </button>
+
+            {/* Phone Storage & PWA Access Card */}
+            <button
+              onClick={() => {
+                getStorageEstimate().then((info) => setStorageInfo(info));
+                setActiveSection('storage');
+              }}
+              className="w-full p-4 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200/80 rounded-2xl flex items-center justify-between transition text-left shadow-sm"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center shrink-0">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">Phone Storage & Local Memory</div>
+                  <div className="text-xs text-slate-500">
+                    {storageInfo.isPersisted ? 'Persistent Access Granted (Safe)' : 'Phone Storage Active for Entries'}
+                  </div>
                 </div>
               </div>
               <span className="text-slate-400 font-bold text-base">›</span>
@@ -697,6 +776,111 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Trash2 className="w-4 h-4" />
                 <span>Account Delete Karein</span>
               </button>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveSection('menu')}
+                className="w-full py-2.5 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50"
+              >
+                ‹ Back to Settings Menu
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 6. Phone Storage & PWA Access */}
+        {activeSection === 'storage' && (
+          <div className="space-y-4">
+            {/* Storage Status Banner */}
+            <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-teal-950 text-sm">
+                  <Smartphone className="w-5 h-5 text-teal-700" />
+                  <span>Phone Memory Access Status</span>
+                </div>
+                {storageInfo.isPersisted ? (
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    Persistent Access
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-[10px] font-bold">
+                    Standard Storage
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-teal-800 leading-relaxed">
+                PWA / Mobile Web mode mein Digital Khata aapke saare len-den aur customers ka data phone ki internal IndexedDB storage mein save rakhta hai.
+              </p>
+
+              {/* Storage Quota Usage */}
+              <div className="bg-white/80 p-3 rounded-xl border border-teal-200/80 space-y-1.5">
+                <div className="flex justify-between text-xs font-bold text-slate-700">
+                  <span>Phone Storage Usage</span>
+                  <span>{storageInfo.usageMB ? `${storageInfo.usageMB} MB` : '<0.1 MB'} used</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-teal-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(storageInfo.percentUsed, 2)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-slate-500 text-right">
+                  Total Allocated Quota: {storageInfo.quotaMB || 1024} MB
+                </div>
+              </div>
+
+              {!storageInfo.isPersisted && (
+                <button
+                  type="button"
+                  onClick={handleEnablePersistentStorage}
+                  disabled={isRequestingStorage}
+                  className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{isRequestingStorage ? 'Requesting Permission...' : 'Enable Persistent Phone Storage Lock'}</span>
+                </button>
+              )}
+            </div>
+
+            {storageMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs rounded-xl font-semibold">
+                {storageMsg}
+              </div>
+            )}
+
+            {/* Direct Phone File Backup & Restore */}
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-teal-700" />
+                <span>Save / Import Phone Files</span>
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Aap phone ki file storage mein backup save kar sakte hain ya doosre phone se export ki gayi backup file se entries import kar sakte hain.
+              </p>
+
+              <button
+                type="button"
+                onClick={onExportLocalData}
+                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+              >
+                <Download className="w-4 h-4 text-emerald-700" />
+                <span>Save All Entries to Phone File (.json)</span>
+              </button>
+
+              <label className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer">
+                <Upload className="w-4 h-4 text-blue-700" />
+                <span>Import Entries from Phone File (.json)</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportFileFromPhone}
+                  className="hidden"
+                />
+              </label>
             </div>
 
             <div className="pt-2">

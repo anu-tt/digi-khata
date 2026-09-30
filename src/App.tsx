@@ -42,6 +42,7 @@ import {
 import {
   getStoredProfile,
   saveStoredProfile,
+  clearStoredProfile,
   getAllParties,
   saveParty,
   deleteParty,
@@ -58,6 +59,7 @@ import {
   exportLocalVault,
   importDecryptedVault,
   wipeLocalDatabase,
+  requestPersistentStorage,
 } from './lib/storage';
 
 import {
@@ -73,7 +75,7 @@ import {
 } from './lib/firebase';
 
 import { encryptData, decryptData } from './lib/crypto';
-import { pushEncryptedVaultApi, pullEncryptedVaultApi } from './lib/api';
+import { pushEncryptedVaultApi, pullEncryptedVaultApi, clearAuthToken } from './lib/api';
 
 // Route check for secret admin URL: only accessible via /ad-min, #ad-min or ?route=ad-min
 function checkIsAdminRoute(): boolean {
@@ -218,6 +220,7 @@ export function App() {
 
   useEffect(() => {
     reloadData();
+    requestPersistentStorage().catch(() => {});
   }, [reloadData]);
 
   useEffect(() => {
@@ -372,6 +375,37 @@ export function App() {
     if (!offlineProfile.pinHash) {
       setIsCreatePinOpen(true);
     }
+  };
+
+  // Complete Logout / Sign Off Handler
+  const handleLogout = async () => {
+    try {
+      await logOutFirebase();
+    } catch (fbErr) {
+      console.warn('Firebase logout error:', fbErr);
+    }
+    clearAuthToken();
+    try {
+      await clearStoredProfile();
+      localStorage.removeItem('digital_khata_profile');
+      sessionStorage.clear();
+    } catch {}
+
+    setProfile(null);
+    setParties([]);
+    setEntries([]);
+    setReminders([]);
+    setDevices([]);
+    setIsLocked(false);
+    setIsCreatePinOpen(false);
+    setActiveTab('home');
+    setActivePartyId(null);
+
+    setIsAuthModalOpen(true);
+    showToast({
+      type: 'success',
+      text: 'Aapka account poori tarah logout ho gaya hai.',
+    });
   };
 
   // 7. PIN Creation completion handler
@@ -726,9 +760,7 @@ export function App() {
                     onDeleteAccount={() => {
                       setIsDeleteAccountOpen(true);
                     }}
-                    onLogout={() => {
-                      setIsAuthModalOpen(true);
-                    }}
+                    onLogout={handleLogout}
                   />
                 </div>
               ) : (
@@ -873,9 +905,7 @@ export function App() {
                     onDeleteAccount={() => {
                       setIsDeleteAccountOpen(true);
                     }}
-                    onLogout={() => {
-                      setIsAuthModalOpen(true);
-                    }}
+                    onLogout={handleLogout}
                   />
                 )}
 

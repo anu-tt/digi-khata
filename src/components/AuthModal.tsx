@@ -17,6 +17,7 @@ import {
 import { googleSignInApi } from '../lib/api';
 import { UserProfile, AuthDevice } from '../types/khata';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onContinueOffline,
 }) => {
   const [mode, setMode] = useState<'welcome' | 'password' | 'profile' | 'offline_info'>('welcome');
-  const [email, setEmail] = useState('tytandoor@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isNewAccount, setIsNewAccount] = useState(false);
@@ -97,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         } catch {}
       } else {
         const res = await googleSignInApi({
-          email: email.trim().toLowerCase() || 'tytandoor@gmail.com',
+          email: email.trim().toLowerCase() || 'user@digitalkhata.in',
           name: name.trim() || 'Vyapari',
           businessName: businessName.trim() || undefined,
           deviceName,
@@ -400,7 +401,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </button>
                 </form>
 
-                <div className="pt-2 border-t border-slate-100 text-center">
+                <div className="pt-3 border-t border-slate-100 flex flex-col items-center gap-2 text-center">
                   <button
                     type="button"
                     onClick={() => setMode('offline_info')}
@@ -408,6 +409,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   >
                     Bina Login Ke Shuru Karein (Local Offline Khata)
                   </button>
+
+                  <PWAInstallButton variant="auth" />
                 </div>
               </div>
             )}
