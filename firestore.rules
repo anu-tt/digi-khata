@@ -11,13 +11,22 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function isVerifiedLegacyOwner(userId) {
+      return request.auth != null &&
+             request.auth.token.email_verified == true &&
+             userId.matches('^usr_[a-zA-Z0-9_]+$') &&
+             exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.email == request.auth.token.email;
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     // User document validation
     function isValidUserProfile(data) {
-      return data.id is string && data.id.size() <= 128 &&
+      return data.keys().hasOnly(['id', 'name', 'email', 'businessName', 'address', 'avatar', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() <= 128 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              (!('email' in data) || (data.email is string && data.email.size() <= 128)) &&
              (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 100)) &&
@@ -28,61 +37,66 @@ service cloud.firestore {
              (!('isBiometricEnabled' in data) || data.isBiometricEnabled is bool);
     }
 
-    // Party document validation
-    function isValidParty(data, userId) {
-      return data.id is string && data.id.size() <= 128 &&
+    function isValidEncryptedVault(data, userId) {
+      return data.keys().hasOnly(['userId', 'ciphertext', 'iv', 'salt', 'version', 'updatedAt']) &&
              data.userId == userId &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             (data.type == 'customer' || data.type == 'supplier') &&
-             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
-             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
-             (!('isArchived' in data) || data.isArchived is bool) &&
-             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
-             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+             data.ciphertext is string && data.ciphertext.size() > 0 && data.ciphertext.size() <= 1000000 &&
+             data.iv is string && data.iv.size() <= 64 &&
+             data.salt is string && data.salt.size() <= 64 &&
+             data.version == 1 &&
+             data.updatedAt is string && data.updatedAt.size() <= 64;
     }
 
-    // Transaction document validation
-    function isValidTransaction(data, userId) {
-      return data.id is string && data.id.size() <= 128 &&
+    function isValidVaultManifest(data, userId) {
+      return data.keys().hasOnly(['userId', 'generation', 'chunksCount', 'iv', 'salt', 'version', 'updatedAt']) &&
              data.userId == userId &&
-             data.partyId is string && data.partyId.size() <= 128 &&
-             data.amount is number && data.amount >= 0 &&
-             (data.type == 'credit' || data.type == 'debit') &&
-             data.date is string && data.date.size() <= 64 &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
-             (!('attachments' in data) || data.attachments is list) &&
-             (!('syncStatus' in data) || data.syncStatus in ['synced', 'pending', 'failed']) &&
-             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
-             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+             data.generation is string && data.generation.matches('^[a-zA-Z0-9]{32}$') &&
+             data.chunksCount is int && data.chunksCount > 0 && data.chunksCount <= 500 &&
+             data.iv is string && data.iv.size() <= 64 &&
+             data.salt is string && data.salt.size() <= 64 &&
+             data.version == 1 &&
+             data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidVaultChunk(data, userId) {
+      return data.keys().hasOnly(['userId', 'generation', 'index', 'ciphertext']) &&
+             data.userId == userId &&
+             data.generation is string && data.generation.matches('^[a-zA-Z0-9]{32}$') &&
+             data.index is int && data.index >= 0 && data.index < 500 &&
+             data.ciphertext is string && data.ciphertext.size() > 0 && data.ciphertext.size() <= 700000;
     }
 
     // Users Collection
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || (request.auth != null && request.auth.token.email_verified == true &&
+        userId.matches('^usr_[a-zA-Z0-9_]+$') && (resource == null || resource.data.email == request.auth.token.email));
+      allow list: if request.auth != null && request.auth.token.email_verified == true &&
+        resource.data.email == request.auth.token.email;
       allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
       allow update: if isOwner(userId) && isValidUserProfile(request.resource.data);
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isVerifiedLegacyOwner(userId);
 
       // Parties Subcollection
       match /parties/{partyId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(partyId) && isValidParty(request.resource.data, userId);
-        allow update: if isOwner(userId) && isValidId(partyId) && isValidParty(request.resource.data, userId);
-        allow delete: if isOwner(userId) && isValidId(partyId);
+        allow get, list: if isOwner(userId) || isVerifiedLegacyOwner(userId);
+        allow delete: if (isOwner(userId) || isVerifiedLegacyOwner(userId)) && isValidId(partyId);
       }
 
       // Transactions Subcollection
       match /transactions/{transactionId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(transactionId) && isValidTransaction(request.resource.data, userId);
-        allow update: if isOwner(userId) && isValidId(transactionId) && isValidTransaction(request.resource.data, userId);
-        allow delete: if isOwner(userId) && isValidId(transactionId);
+        allow get, list: if isOwner(userId) || isVerifiedLegacyOwner(userId);
+        allow delete: if (isOwner(userId) || isVerifiedLegacyOwner(userId)) && isValidId(transactionId);
       }
 
       // Vault / backup subcollection
       match /vault/{vaultId} {
-        allow get, list: if isOwner(userId);
-        allow create, update, delete: if isOwner(userId) && isValidId(vaultId);
+        allow get, list: if isOwner(userId) || isVerifiedLegacyOwner(userId);
+        allow create, update: if isOwner(userId) && (
+          (vaultId == 'encrypted' && (isValidVaultManifest(request.resource.data, userId) || isValidEncryptedVault(request.resource.data, userId))) ||
+          (vaultId.matches('^chunk_[a-zA-Z0-9]{32}_[0-9]{1,3}$') && isValidVaultChunk(request.resource.data, userId))
+        );
+        allow delete: if (isOwner(userId) || isVerifiedLegacyOwner(userId)) &&
+          (vaultId == 'encrypted' || vaultId.matches('^chunk_[a-zA-Z0-9]{32}_[0-9]{1,3}$'));
       }
     }
   }

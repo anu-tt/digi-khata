@@ -58,6 +58,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [recoveryPhraseInput, setRecoveryPhraseInput] = useState('');
+  const [showRecoveryPhrase, setShowRecoveryPhrase] = useState(false);
 
   // Phone Storage Access State
   const [storageInfo, setStorageInfo] = useState<{
@@ -654,13 +656,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* 4. Firebase Cloud Sync & Backup */}
         {activeSection === 'sync' && (
           <div className="space-y-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-3">
+              <div className="font-bold text-amber-950">Private cloud recovery key</div>
+              <p className="text-amber-900 leading-relaxed">
+                Ledger backups are encrypted on this device before upload. Keep this key somewhere safe. Without it, cloud backups cannot be restored on another device.
+              </p>
+              {profile.recoveryPhrase ? (
+                <>
+                  <div className="rounded-lg border border-amber-300 bg-white p-3 font-mono break-words select-all">
+                    {showRecoveryPhrase ? profile.recoveryPhrase : '•••• •••• •••• •••• •••• •••• •••• ••••'}
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setShowRecoveryPhrase((value) => !value)} className="px-3 py-2 rounded-lg bg-amber-100 text-amber-950 font-bold">
+                      {showRecoveryPhrase ? 'Hide key' : 'Show key'}
+                    </button>
+                    <button type="button" onClick={() => navigator.clipboard?.writeText(profile.recoveryPhrase || '')} className="px-3 py-2 rounded-lg bg-amber-100 text-amber-950 font-bold">
+                      Copy key
+                    </button>
+                  </div>
+                </>
+              ) : null}
+              <label className="block font-semibold text-amber-950">Use a recovery key from another device</label>
+              <input
+                value={recoveryPhraseInput}
+                onChange={(event) => setRecoveryPhraseInput(event.target.value)}
+                autoComplete="off"
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 font-mono"
+                placeholder="Paste recovery key"
+              />
+              <button
+                type="button"
+                disabled={!recoveryPhraseInput.trim()}
+                onClick={() => {
+                  onUpdateProfile({ recoveryPhrase: recoveryPhraseInput.trim().replace(/\s+/g, ' ').toLowerCase() });
+                  setRecoveryPhraseInput('');
+                }}
+                className="px-3 py-2 rounded-lg bg-amber-700 text-white font-bold disabled:opacity-50"
+              >
+                Save recovery key
+              </button>
+            </div>
             <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl text-xs space-y-1 shadow-sm">
               <div className="font-bold text-purple-900 flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-purple-700" />
                 <span>Firebase Firestore Cloud Store</span>
               </div>
               <div className="text-purple-800 text-[11px] leading-relaxed">
-                Aapke transactions aur parties ka data real-time mein Firebase Firestore database par sync rehta hai.
+                Ledger aur transaction backups encrypt hoke Firebase par upload hote hain. Basic profile details (naam, email, dukaan ka naam, pata, avatar) account ke saath alag store hoti hain.
               </div>
             </div>
 

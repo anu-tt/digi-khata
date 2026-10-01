@@ -5,6 +5,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signOut as fbSignOut,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -16,11 +17,16 @@ import {
   getDocs,
   collection,
   deleteDoc,
+  deleteField,
   writeBatch,
+  runTransaction,
   getDocFromServer,
+  query,
+  where,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { UserProfile, KhataParty, KhataEntry } from '../types/khata';
+import { EncryptedPayload } from './crypto';
 
 // 1. Initialize Firebase App, Auth, & Firestore with custom Database ID
 export const app = initializeApp(firebaseConfig);
@@ -98,12 +104,19 @@ export async function signInWithGoogleFirebase(): Promise<{ user: FirebaseUser }
 
 export async function signInWithEmailPassword(email: string, password: string): Promise<FirebaseUser> {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  if (!result.user.emailVerified) {
+    await sendEmailVerification(result.user);
+    await fbSignOut(auth);
+    throw new Error('A verification email was sent. Verify your email, then sign in again.');
+  }
   return result.user;
 }
 
 export async function createEmailPasswordAccount(email: string, password: string): Promise<FirebaseUser> {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-  return result.user;
+  await sendEmailVerification(result.user);
+  await fbSignOut(auth);
+  throw new Error('Verification email sent. Verify your email, then sign in.');
 }
 
 export async function logOutFirebase(): Promise<void> {
@@ -124,11 +137,12 @@ export async function saveUserProfileToFirestore(profile: UserProfile): Promise<
         businessName: profile.businessName || '',
         address: profile.address || '',
         avatar: profile.avatar || '',
-        pinHash: profile.pinHash || '',
-        pinSalt: profile.pinSalt || '',
-        securityQuestion: profile.securityQuestion || '',
-        securityAnswerHash: profile.securityAnswerHash || '',
-        isBiometricEnabled: Boolean(profile.isBiometricEnabled),
+        pinHash: deleteField(),
+        pinSalt: deleteField(),
+        securityQuestion: deleteField(),
+        securityAnswerHash: deleteField(),
+        isBiometricEnabled: deleteField(),
+        recoveryPhrase: deleteField(),
         createdAt: profile.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -151,76 +165,13 @@ export async function getUserProfileFromFirestore(userId: string): Promise<UserP
   }
 }
 
-// 6. Firestore Parties Operations
-export async function savePartyToFirestore(userId: string, party: KhataParty): Promise<void> {
-  const path = `users/${userId}/parties/${party.id}`;
-  try {
-    const partyDocRef = doc(db, 'users', userId, 'parties', party.id);
-    await setDoc(partyDocRef, {
-      id: party.id,
-      userId,
-      name: party.name,
-      phone: party.phone || '',
-      type: party.type,
-      notes: party.notes || '',
-      isArchived: Boolean(party.isArchived),
-      createdAt: party.createdAt || new Date().toISOString(),
-      updatedAt: party.updatedAt || new Date().toISOString(),
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, path);
-  }
-}
-
-export async function deletePartyFromFirestore(userId: string, partyId: string): Promise<void> {
-  const path = `users/${userId}/parties/${partyId}`;
-  try {
-    const partyDocRef = doc(db, 'users', userId, 'parties', partyId);
-    await deleteDoc(partyDocRef);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, path);
-  }
-}
-
-// 7. Firestore Transactions Operations
-export async function saveTransactionToFirestore(userId: string, entry: KhataEntry): Promise<void> {
-  const path = `users/${userId}/transactions/${entry.id}`;
-  try {
-    const txDocRef = doc(db, 'users', userId, 'transactions', entry.id);
-    await setDoc(txDocRef, {
-      id: entry.id,
-      userId,
-      partyId: entry.partyId,
-      amount: entry.amount,
-      type: entry.type,
-      date: entry.date,
-      description: entry.description || '',
-      attachments: entry.attachments || [],
-      syncStatus: 'synced',
-      createdAt: entry.createdAt || new Date().toISOString(),
-      updatedAt: entry.updatedAt || new Date().toISOString(),
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, path);
-  }
-}
-
-export async function deleteTransactionFromFirestore(userId: string, entryId: string): Promise<void> {
-  const path = `users/${userId}/transactions/${entryId}`;
-  try {
-    const txDocRef = doc(db, 'users', userId, 'transactions', entryId);
-    await deleteDoc(txDocRef);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, path);
-  }
-}
-
-// 8. Pull Complete Cloud Data from Firestore
+// Read legacy plaintext records only to migrate older installs to encrypted backups.
 export async function fetchUserFirestoreData(
   userId: string
 ): Promise<{ profile: UserProfile | null; parties: KhataParty[]; entries: KhataEntry[] }> {
   try {
     const profile = await getUserProfileFromFirestore(userId);
+    if (!profile) return { profile: null, parties: [], entries: [] };
 
     const partiesRef = collection(db, 'users', userId, 'parties');
     const partiesSnap = await getDocs(partiesRef);
@@ -242,93 +193,117 @@ export async function fetchUserFirestoreData(
   }
 }
 
-// 9. Sync All Local Data to Firestore Cloud in Batches
-export async function syncAllToFirestore(
-  userId: string,
-  parties: KhataParty[],
-  entries: KhataEntry[],
-  profile?: UserProfile
-): Promise<void> {
-  const batch = writeBatch(db);
-
-  if (profile) {
-    const userRef = doc(db, 'users', userId);
-    batch.set(
-      userRef,
-      {
-        id: profile.id,
-        name: profile.name,
-        email: profile.email || '',
-        businessName: profile.businessName || '',
-        address: profile.address || '',
-        avatar: profile.avatar || '',
-        pinHash: profile.pinHash || '',
-        pinSalt: profile.pinSalt || '',
-        securityQuestion: profile.securityQuestion || '',
-        securityAnswerHash: profile.securityAnswerHash || '',
-        isBiometricEnabled: Boolean(profile.isBiometricEnabled),
-        createdAt: profile.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-  }
-
-  for (const party of parties) {
-    const pRef = doc(db, 'users', userId, 'parties', party.id);
-    batch.set(pRef, {
-      id: party.id,
-      userId,
-      name: party.name,
-      phone: party.phone || '',
-      type: party.type,
-      notes: party.notes || '',
-      isArchived: Boolean(party.isArchived),
-      createdAt: party.createdAt || new Date().toISOString(),
-      updatedAt: party.updatedAt || new Date().toISOString(),
-    });
-  }
-
-  for (const entry of entries) {
-    const tRef = doc(db, 'users', userId, 'transactions', entry.id);
-    batch.set(tRef, {
-      id: entry.id,
-      userId,
-      partyId: entry.partyId,
-      amount: entry.amount,
-      type: entry.type,
-      date: entry.date,
-      description: entry.description || '',
-      attachments: entry.attachments || [],
-      syncStatus: 'synced',
-      createdAt: entry.createdAt || new Date().toISOString(),
-      updatedAt: entry.updatedAt || new Date().toISOString(),
-    });
-  }
-
-  await batch.commit();
+export async function findLegacyUserIdsByEmail(email: string, currentUserId: string): Promise<string[]> {
+  const usersQuery = query(collection(db, 'users'), where('email', '==', email.trim().toLowerCase()));
+  const snapshot = await getDocs(usersQuery);
+  return snapshot.docs
+    .map((item) => item.id)
+    .filter((id) => id !== currentUserId && id.startsWith('usr_'));
 }
 
-// 10. Completely Delete All User Account Data from Firestore
+export async function saveEncryptedVaultToFirestore(userId: string, payload: EncryptedPayload): Promise<void> {
+  const collectionRef = collection(db, 'users', userId, 'vault');
+  const generation = crypto.randomUUID().replace(/-/g, '');
+  const chunkSize = 700_000;
+  const chunkCount = Math.ceil(payload.ciphertext.length / chunkSize);
+  if (chunkCount < 1 || chunkCount > 500) throw new Error('Encrypted backup is too large to sync.');
+
+  for (let offset = 0, index = 0; offset < payload.ciphertext.length; offset += chunkSize, index++) {
+    await setDoc(doc(collectionRef, `chunk_${generation}_${index}`), {
+      userId,
+      generation,
+      index,
+      ciphertext: payload.ciphertext.slice(offset, offset + chunkSize),
+    });
+  }
+
+  // Publish the manifest last so interrupted uploads leave the previous snapshot usable.
+  const manifestRef = doc(collectionRef, 'encrypted');
+  const previousGeneration = await runTransaction(db, async (transaction) => {
+    const current = await transaction.get(manifestRef);
+    const oldGeneration = current.data()?.generation;
+    transaction.set(manifestRef, {
+    userId,
+    generation,
+    chunksCount: chunkCount,
+    iv: payload.iv,
+    salt: payload.salt,
+    version: payload.version,
+    updatedAt: new Date().toISOString(),
+    });
+    return typeof oldGeneration === 'string' ? oldGeneration : null;
+  });
+
+  // Migrate old readable ledger documents only after the encrypted backup is committed.
+  for (const collectionName of ['parties', 'transactions'] as const) {
+    const snapshot = await getDocs(collection(db, 'users', userId, collectionName));
+    for (let offset = 0; offset < snapshot.docs.length; offset += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(offset, offset + 450).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+  }
+
+  const oldVaultDocs = previousGeneration ? await getDocs(collectionRef) : null;
+  const previousPrefix = previousGeneration ? `chunk_${previousGeneration}_` : '';
+  const obsoleteChunks = oldVaultDocs?.docs.filter((item) => item.id.startsWith(previousPrefix)) || [];
+  for (let offset = 0; offset < obsoleteChunks.length; offset += 450) {
+    const batch = writeBatch(db);
+    obsoleteChunks.slice(offset, offset + 450).forEach((item) => batch.delete(item.ref));
+    await batch.commit();
+  }
+}
+
+export async function getEncryptedVaultFromFirestore(userId: string): Promise<EncryptedPayload | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const snapshot = await getDoc(doc(db, 'users', userId, 'vault', 'encrypted'));
+    if (!snapshot.exists()) return null;
+    const data = snapshot.data();
+    if (typeof data.iv !== 'string' || typeof data.salt !== 'string') throw new Error('Cloud backup format invalid hai.');
+    if (typeof data.ciphertext === 'string') {
+      return { ciphertext: data.ciphertext, iv: data.iv, salt: data.salt, version: data.version || 1 };
+    }
+    if (typeof data.generation !== 'string' || !Number.isInteger(data.chunksCount) || data.chunksCount < 1 || data.chunksCount > 500) {
+      throw new Error('Cloud backup manifest invalid hai.');
+    }
+    const collectionRef = collection(db, 'users', userId, 'vault');
+    const chunks = await getDocs(query(collectionRef, where('generation', '==', data.generation)));
+    const orderedChunks = chunks.docs.sort((left, right) => left.data().index - right.data().index);
+    if (orderedChunks.length === data.chunksCount && orderedChunks.every((item, index) => item.data().index === index && typeof item.data().ciphertext === 'string')) {
+      return {
+        ciphertext: orderedChunks.map((item) => item.data().ciphertext as string).join(''),
+        iv: data.iv,
+        salt: data.salt,
+        version: data.version || 1,
+      };
+    }
+  }
+  throw new Error('Cloud backup is changing or incomplete. Try again shortly.');
+}
+
+export async function deleteLegacyFirestoreAccount(userId: string): Promise<void> {
+  for (const collectionName of ['parties', 'transactions', 'vault'] as const) {
+    const snapshot = await getDocs(collection(db, 'users', userId, collectionName));
+    for (let offset = 0; offset < snapshot.docs.length; offset += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(offset, offset + 450).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+  }
+  await deleteDoc(doc(db, 'users', userId));
+}
+
+// Completely delete cloud data for one user.
 export async function deleteAllUserFirestoreData(userId: string): Promise<void> {
   try {
-    // Delete all parties subcollection
-    const partiesRef = collection(db, 'users', userId, 'parties');
-    const partiesSnap = await getDocs(partiesRef);
-    const pBatch = writeBatch(db);
-    partiesSnap.forEach((d) => {
-      pBatch.delete(d.ref);
-    });
-    await pBatch.commit();
-
-    // Delete all transactions subcollection
-    const txRef = collection(db, 'users', userId, 'transactions');
-    const txSnap = await getDocs(txRef);
-    const tBatch = writeBatch(db);
-    txSnap.forEach((d) => {
-      tBatch.delete(d.ref);
-    });
-    await tBatch.commit();
+    for (const collectionName of ['parties', 'transactions', 'vault'] as const) {
+      const snapshot = await getDocs(collection(db, 'users', userId, collectionName));
+      for (let offset = 0; offset < snapshot.docs.length; offset += 450) {
+        const batch = writeBatch(db);
+        snapshot.docs.slice(offset, offset + 450).forEach((item) => batch.delete(item.ref));
+        await batch.commit();
+      }
+    }
 
     // Delete root user document
     const userDocRef = doc(db, 'users', userId);

@@ -255,6 +255,39 @@ export async function removeDevice(id: string): Promise<void> {
   await performTx('devices', 'readwrite', (store) => store.delete(id));
 }
 
+export async function getLocalRecoveryPhrase(userId: string): Promise<string | null> {
+  const value = await performTx<{ value?: string } | undefined>('metadata', 'readonly', (store) => store.get(`recovery:${userId}`));
+  return value?.value || null;
+}
+
+export async function saveLocalRecoveryPhrase(userId: string, value: string): Promise<void> {
+  await performTx('metadata', 'readwrite', (store) => store.put({ key: `recovery:${userId}`, value }));
+}
+
+export async function migrateLocalAccountData(oldUserId: string, newUserId: string): Promise<void> {
+  if (!oldUserId || !newUserId || oldUserId === newUserId) return;
+  const db = await getDB();
+  const tx = db.transaction(['parties', 'entries', 'reminders', 'devices'], 'readwrite');
+  for (const storeName of ['parties', 'entries', 'reminders', 'devices']) {
+    const store = tx.objectStore(storeName);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      for (const record of request.result as Array<{ id: string; userId?: string }>) {
+        if (record.userId === oldUserId) store.put({ ...record, userId: newUserId });
+      }
+    };
+  }
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+  const oldSecret = await getLocalRecoveryPhrase(oldUserId);
+  if (oldSecret && !(await getLocalRecoveryPhrase(newUserId))) {
+    await saveLocalRecoveryPhrase(newUserId, oldSecret);
+  }
+}
+
 // Calculations: Purely derived from real data records
 export function calculatePartyBalance(
   party: KhataParty,

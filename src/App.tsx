@@ -37,6 +37,7 @@ import {
   EntryType,
   DashboardStats,
   PartyBalanceSummary,
+  UserDecryptedVault,
 } from './types/khata';
 
 import {
@@ -57,23 +58,28 @@ import {
   calculatePartyBalance,
   calculateDashboardStats,
   exportLocalVault,
+  importDecryptedVault,
   wipeLocalDatabase,
   requestPersistentStorage,
+  getLocalRecoveryPhrase,
+  saveLocalRecoveryPhrase,
+  migrateLocalAccountData,
 } from './lib/storage';
 
 import {
   saveUserProfileToFirestore,
-  savePartyToFirestore,
-  deletePartyFromFirestore,
-  saveTransactionToFirestore,
-  deleteTransactionFromFirestore,
   fetchUserFirestoreData,
-  syncAllToFirestore,
+  findLegacyUserIdsByEmail,
+  saveEncryptedVaultToFirestore,
+  getEncryptedVaultFromFirestore,
+  deleteLegacyFirestoreAccount,
+  auth,
   deleteAllUserFirestoreData,
   logOutFirebase,
 } from './lib/firebase';
 
 import { clearAuthToken } from './lib/api';
+import { decryptData, encryptData, generateRecoveryPhrase } from './lib/crypto';
 
 // Route check for secret admin URL: only accessible via /ad-min, #ad-min or ?route=ad-min
 function checkIsAdminRoute(): boolean {
@@ -167,6 +173,18 @@ export function App() {
         return;
       }
 
+      let localSecret = storedProf.recoveryPhrase || await getLocalRecoveryPhrase(storedProf.id) || '';
+      let existingEncryptedVault = null;
+      if (!localSecret && isOnline) {
+        try {
+          existingEncryptedVault = await getEncryptedVaultFromFirestore(storedProf.id);
+        } catch {}
+      }
+      if (!localSecret && !existingEncryptedVault) localSecret = generateRecoveryPhrase();
+      storedProf.recoveryPhrase = localSecret;
+      if (localSecret) await saveLocalRecoveryPhrase(storedProf.id, localSecret);
+      await saveStoredProfile(storedProf);
+
       setProfile(storedProf);
 
       // Check 6-digit PIN on app opening: if PIN set, lock screen activates immediately!
@@ -181,19 +199,27 @@ export function App() {
       const rList = await getAllReminders(storedProf.id);
       const dList = await getAllDevices(storedProf.id);
 
-      // If local database is empty but user is logged in, attempt to fetch from Firestore Cloud
+      // Restore an encrypted cloud snapshot when this device has the recovery phrase.
       if (pList.length === 0 && eList.length === 0 && storedProf.id && isOnline) {
         try {
-          const cloudData = await fetchUserFirestoreData(storedProf.id);
-          if (cloudData && (cloudData.parties.length > 0 || cloudData.entries.length > 0)) {
-            for (const p of cloudData.parties) {
-              await saveParty(p);
+          const encrypted = existingEncryptedVault || await getEncryptedVaultFromFirestore(storedProf.id);
+          if (encrypted) {
+            if (!localSecret) throw new Error('Enter your recovery key in Settings to restore this cloud backup.');
+            const vault = await decryptData<UserDecryptedVault>(encrypted, localSecret);
+            if (vault.profile.id !== storedProf.id) throw new Error('Backup account mismatch.');
+            await importDecryptedVault(vault);
+            pList = vault.parties;
+            eList = vault.entries;
+          } else {
+            const legacy = await fetchUserFirestoreData(storedProf.id);
+            if (legacy.parties.length || legacy.entries.length) {
+              for (const party of legacy.parties) await saveParty(party);
+              for (const entry of legacy.entries) await saveEntry(entry);
+              const vault = await exportLocalVault();
+              if (vault) await saveEncryptedVaultToFirestore(storedProf.id, await encryptData(vault, localSecret));
+              pList = legacy.parties;
+              eList = legacy.entries;
             }
-            for (const e of cloudData.entries) {
-              await saveEntry(e);
-            }
-            pList = cloudData.parties;
-            eList = cloudData.entries;
           }
         } catch (cloudErr) {
           console.warn('Could not pull initial Firestore data:', cloudErr);
@@ -231,51 +257,91 @@ export function App() {
   }, [parties, entries]);
 
   // 2. Synchronization Logic (Firestore Cloud & Vault API)
-  const triggerSync = async () => {
-    if (!profile || !isOnline) {
+  const triggerSync = async (): Promise<boolean> => {
+    if (!profile || !isOnline || auth.currentUser?.uid !== profile.id) {
       setSyncState('pending');
-      return;
+      return false;
     }
 
     setSyncState('syncing');
 
     try {
-      // Sync to Firebase Firestore
-      try {
-        await syncAllToFirestore(profile.id, parties, entries, profile);
-      } catch (fbErr) {
-        console.warn('Firestore sync note:', fbErr);
+      const activeProfile = await getStoredProfile();
+      if (!activeProfile || activeProfile.id !== profile.id || !activeProfile.recoveryPhrase) {
+        throw new Error('Cloud recovery key missing.');
       }
+      const localParties = await getAllParties(profile.id);
+      const localEntries = await getAllEntries(profile.id);
+      const localReminders = await getAllReminders(profile.id);
+      const currentCloud = await getEncryptedVaultFromFirestore(profile.id);
+      let legacyAccountsToDelete: string[] = [];
+      if (currentCloud) {
+        // Never overwrite a cloud backup unless this recovery key can decrypt it.
+        const cloudVault = await decryptData<UserDecryptedVault>(currentCloud, activeProfile.recoveryPhrase);
+        if (cloudVault.profile.id !== profile.id) throw new Error('Backup account mismatch.');
+        if (localParties.length === 0 && localEntries.length === 0 && localReminders.length === 0 &&
+            (cloudVault.parties.length > 0 || cloudVault.entries.length > 0 || cloudVault.reminders.length > 0)) {
+          await importDecryptedVault(cloudVault);
+          setParties(cloudVault.parties);
+          setEntries(cloudVault.entries);
+          setReminders(cloudVault.reminders);
+          setSyncState('success');
+          return true;
+        }
+      } else {
+        // Preserve cloud records from the previous plaintext format before migrating them.
+        const legacy = await fetchUserFirestoreData(profile.id);
+        const legacyIds = activeProfile.email ? await findLegacyUserIdsByEmail(activeProfile.email, profile.id) : [];
+        const legacyParties = [...legacy.parties];
+        const legacyEntries = [...legacy.entries];
+        for (const legacyId of legacyIds) {
+          const oldAccount = await fetchUserFirestoreData(legacyId);
+          legacyParties.push(...oldAccount.parties);
+          legacyEntries.push(...oldAccount.entries);
+        }
+        legacyAccountsToDelete = legacyIds;
+        for (const party of legacyParties) await saveParty({ ...party, userId: profile.id });
+        for (const entry of legacyEntries) await saveEntry({ ...entry, userId: profile.id });
+      }
+      const vault = await exportLocalVault();
+      if (!vault) throw new Error('Local backup unavailable.');
+      const encrypted = await encryptData(vault, activeProfile.recoveryPhrase);
+      await saveEncryptedVaultToFirestore(profile.id, encrypted);
+      for (const legacyId of legacyAccountsToDelete) await deleteLegacyFirestoreAccount(legacyId);
 
       setSyncState('success');
       setTimeout(() => setSyncState('idle'), 4000);
+      return true;
     } catch (err) {
       console.error('Sync failed:', err);
       setSyncState('error');
+      return false;
     }
   };
 
   // 3. Cloud Restore
   const handleRestoreCloudVault = async () => {
-    if (!profile) throw new Error('Pehle login karein.');
+    if (!profile || auth.currentUser?.uid !== profile.id) throw new Error('Cloud account mein sign in karein.');
     if (!isOnline) throw new Error('Internet nahi hai.');
 
-    // Attempt restore from Firestore first
-    try {
-      const cloudData = await fetchUserFirestoreData(profile.id);
-      if (cloudData && (cloudData.parties.length > 0 || cloudData.entries.length > 0)) {
-        for (const p of cloudData.parties) {
-          await saveParty(p);
-        }
-        for (const e of cloudData.entries) {
-          await saveEntry(e);
-        }
-        await reloadData();
-        return;
-      }
-    } catch {}
+    const encrypted = await getEncryptedVaultFromFirestore(profile.id);
+    if (encrypted) {
+      const vault = await decryptData<UserDecryptedVault>(encrypted, profile.recoveryPhrase || '');
+      if (vault.profile.id !== profile.id) throw new Error('Backup account mismatch.');
+      await importDecryptedVault(vault);
+      await reloadData();
+      return;
+    }
 
-    throw new Error('Cloud par koi backup nahi mila.');
+    // Import legacy plaintext Firestore data once, then replace it with ciphertext.
+    const legacy = await fetchUserFirestoreData(profile.id);
+    if (!legacy.parties.length && !legacy.entries.length) throw new Error('Cloud par koi backup nahi mila.');
+    for (const party of legacy.parties) await saveParty(party);
+    for (const entry of legacy.entries) await saveEntry(entry);
+    const migratedVault = await exportLocalVault();
+    if (!migratedVault || !profile.recoveryPhrase) throw new Error('Cloud recovery key missing.');
+    await saveEncryptedVaultToFirestore(profile.id, await encryptData(migratedVault, profile.recoveryPhrase));
+    await reloadData();
   };
 
   // 4. Offline Decrypted JSON Export
@@ -293,8 +359,35 @@ export function App() {
 
   // 5. Auth Success handler
   const handleAuthSuccess = async (newProfile: UserProfile, device: AuthDevice) => {
+    const previousProfile = await getStoredProfile();
+    if (previousProfile?.email && newProfile.email && previousProfile.id !== newProfile.id &&
+        previousProfile.email.trim().toLowerCase() === newProfile.email.trim().toLowerCase()) {
+      await migrateLocalAccountData(previousProfile.id, newProfile.id);
+      newProfile = {
+        ...previousProfile,
+        ...newProfile,
+        pinHash: previousProfile.pinHash,
+        pinSalt: previousProfile.pinSalt,
+        securityQuestion: previousProfile.securityQuestion,
+        securityAnswerHash: previousProfile.securityAnswerHash,
+        isBiometricEnabled: previousProfile.isBiometricEnabled,
+      };
+    }
+    let encryptedSnapshot = null;
+    if (isOnline) {
+      try {
+        encryptedSnapshot = await getEncryptedVaultFromFirestore(newProfile.id);
+      } catch {}
+    }
+    newProfile.recoveryPhrase = newProfile.recoveryPhrase || await getLocalRecoveryPhrase(newProfile.id) || (encryptedSnapshot ? '' : generateRecoveryPhrase());
+    if (newProfile.recoveryPhrase) await saveLocalRecoveryPhrase(newProfile.id, newProfile.recoveryPhrase);
     device.userId = newProfile.id;
     await saveStoredProfile(newProfile);
+    try {
+      await saveUserProfileToFirestore(newProfile);
+    } catch (profileErr) {
+      console.warn('Cloud profile save note:', profileErr);
+    }
     await saveDevice(device);
     setProfile(newProfile);
     setDevices([device]);
@@ -305,26 +398,53 @@ export function App() {
       setIsCreatePinOpen(true);
     }
 
-    // Pull any existing data for this user from Firestore
+    // Restore the encrypted snapshot if this device has the matching recovery phrase.
+    let restoredOrMigrated = false;
     try {
       if (newProfile.id && isOnline) {
-        const cloudData = await fetchUserFirestoreData(newProfile.id);
-        if (cloudData && (cloudData.parties.length > 0 || cloudData.entries.length > 0)) {
-          for (const p of cloudData.parties) {
-            await saveParty(p);
+        const encrypted = encryptedSnapshot || await getEncryptedVaultFromFirestore(newProfile.id);
+        if (encrypted) {
+          if (!newProfile.recoveryPhrase) throw new Error('Enter your recovery key in Settings to restore this cloud backup.');
+          const vault = await decryptData<UserDecryptedVault>(encrypted, newProfile.recoveryPhrase);
+          if (vault.profile.id !== newProfile.id) throw new Error('Backup account mismatch.');
+          await importDecryptedVault(vault);
+          setParties(vault.parties);
+          setEntries(vault.entries);
+          setReminders(vault.reminders);
+          restoredOrMigrated = true;
+        } else {
+          const legacy = await fetchUserFirestoreData(newProfile.id);
+          const legacyUserIds = newProfile.email
+            ? await findLegacyUserIdsByEmail(newProfile.email, newProfile.id)
+            : [];
+          const legacyParties = [...legacy.parties];
+          const legacyEntries = [...legacy.entries];
+          for (const legacyId of legacyUserIds) {
+            const oldAccount = await fetchUserFirestoreData(legacyId);
+            legacyParties.push(...oldAccount.parties);
+            legacyEntries.push(...oldAccount.entries);
           }
-          for (const e of cloudData.entries) {
-            await saveEntry(e);
+          if (legacyParties.length || legacyEntries.length) {
+            for (const party of legacyParties) await saveParty({ ...party, userId: newProfile.id });
+            for (const entry of legacyEntries) await saveEntry({ ...entry, userId: newProfile.id });
+            const vault = await exportLocalVault();
+            if (vault) await saveEncryptedVaultToFirestore(newProfile.id, await encryptData(vault, newProfile.recoveryPhrase));
+            for (const legacyId of legacyUserIds) await deleteLegacyFirestoreAccount(legacyId);
+            setParties(legacyParties.map((party) => ({ ...party, userId: newProfile.id })));
+            setEntries(legacyEntries.map((entry) => ({ ...entry, userId: newProfile.id })));
+            restoredOrMigrated = true;
+          } else {
+            const vault = await exportLocalVault();
+            if (vault) await saveEncryptedVaultToFirestore(newProfile.id, await encryptData(vault, newProfile.recoveryPhrase));
+            restoredOrMigrated = true;
           }
-          setParties(cloudData.parties);
-          setEntries(cloudData.entries);
         }
       }
     } catch (e) {
       console.warn('Initial pull note:', e);
     }
 
-    triggerSync();
+    setSyncState(!isOnline ? 'pending' : restoredOrMigrated ? 'success' : 'error');
   };
 
   // 6. Continue Offline handler
@@ -392,6 +512,7 @@ export function App() {
         await saveUserProfileToFirestore(updatedProfile);
       } catch {}
     }
+    triggerSync();
   };
 
   // 8. Reset PIN with Security Answer in LockScreen
@@ -412,6 +533,7 @@ export function App() {
         await saveUserProfileToFirestore(updated);
       } catch {}
     }
+    triggerSync();
   };
 
   // 9. Add Party handler
@@ -432,14 +554,6 @@ export function App() {
       type: 'success',
       text: `${newParty.name} (${newParty.type === 'customer' ? 'Customer' : 'Supplier'}) add ho gaye!`,
     });
-
-    if (isOnline && profile?.id) {
-      try {
-        await savePartyToFirestore(profile.id, newParty);
-      } catch (err) {
-        console.warn('Firestore party save note:', err);
-      }
-    }
 
     triggerSync();
   };
@@ -463,14 +577,6 @@ export function App() {
       text: `₹${newEntry.amount.toLocaleString('en-IN')} ki nayi entry save ho gayi!`,
     });
 
-    if (isOnline && profile?.id) {
-      try {
-        await saveTransactionToFirestore(profile.id, newEntry);
-      } catch (err) {
-        console.warn('Firestore transaction save note:', err);
-      }
-    }
-
     triggerSync();
   };
 
@@ -483,12 +589,6 @@ export function App() {
       type: 'delete',
       text: 'Entry delete ho gayi.',
     });
-
-    if (isOnline && profile?.id) {
-      try {
-        await deleteTransactionFromFirestore(profile.id, id);
-      } catch {}
-    }
 
     triggerSync();
   };
@@ -505,12 +605,6 @@ export function App() {
       type: 'delete',
       text: `${p?.name || 'Party'} khata delete ho gaya.`,
     });
-
-    if (isOnline && profile?.id) {
-      try {
-        await deletePartyFromFirestore(profile.id, id);
-      } catch {}
-    }
 
     triggerSync();
   };
@@ -529,12 +623,6 @@ export function App() {
       type: 'info',
       text: `${party.name} ${updated.isArchived ? 'archived ho gaye' : 'unarchived ho gaye'}.`,
     });
-
-    if (isOnline && profile?.id) {
-      try {
-        await savePartyToFirestore(profile.id, updated);
-      } catch {}
-    }
 
     triggerSync();
   };
@@ -716,6 +804,10 @@ export function App() {
                     onBackToHome={() => setActiveTab('home')}
                     onUpdateProfile={async (updated) => {
                       const newProf = { ...profile, ...updated, updatedAt: new Date().toISOString() };
+                      if (updated.recoveryPhrase) {
+                        newProf.recoveryPhrase = updated.recoveryPhrase.trim().replace(/\s+/g, ' ').toLowerCase();
+                        await saveLocalRecoveryPhrase(newProf.id, newProf.recoveryPhrase);
+                      }
                       await saveStoredProfile(newProf);
                       setProfile(newProf);
                       if (isOnline && newProf.id) {
@@ -725,7 +817,9 @@ export function App() {
                       }
                       triggerSync();
                     }}
-                    onManualSync={triggerSync}
+                    onManualSync={async () => {
+                      if (!(await triggerSync())) throw new Error('Sync failed. Check the recovery key and connection.');
+                    }}
                     onRestoreCloudVault={handleRestoreCloudVault}
                     onExportLocalData={handleExportLocalData}
                     onDeleteAccount={() => {
@@ -861,6 +955,10 @@ export function App() {
                     onBackToHome={() => setActiveTab('home')}
                     onUpdateProfile={async (updated) => {
                       const newProf = { ...profile, ...updated, updatedAt: new Date().toISOString() };
+                      if (updated.recoveryPhrase) {
+                        newProf.recoveryPhrase = updated.recoveryPhrase.trim().replace(/\s+/g, ' ').toLowerCase();
+                        await saveLocalRecoveryPhrase(newProf.id, newProf.recoveryPhrase);
+                      }
                       await saveStoredProfile(newProf);
                       setProfile(newProf);
                       if (isOnline && newProf.id) {
@@ -870,7 +968,9 @@ export function App() {
                       }
                       triggerSync();
                     }}
-                    onManualSync={triggerSync}
+                    onManualSync={async () => {
+                      if (!(await triggerSync())) throw new Error('Sync failed. Check the recovery key and connection.');
+                    }}
                     onRestoreCloudVault={handleRestoreCloudVault}
                     onExportLocalData={handleExportLocalData}
                     onDeleteAccount={() => {

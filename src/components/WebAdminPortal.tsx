@@ -140,7 +140,7 @@ export const WebAdminPortal: React.FC<WebAdminPortalProps> = ({ onBackToApp }) =
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@digitalkhata.in"
+                  placeholder="Admin email"
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
                   autoFocus
                 />
@@ -152,7 +152,7 @@ export const WebAdminPortal: React.FC<WebAdminPortalProps> = ({ onBackToApp }) =
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Admin@2026"
+                  placeholder="Admin password"
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
@@ -168,7 +168,7 @@ export const WebAdminPortal: React.FC<WebAdminPortalProps> = ({ onBackToApp }) =
               </div>
 
               <div className="text-[11px] text-slate-500 text-center pt-2">
-                Authorized administrators only: <code className="text-amber-300">admin@digitalkhata.in</code>
+                Admin credentials are configured by the deployment operator.
               </div>
             </form>
           </div>
@@ -183,13 +183,13 @@ export const WebAdminPortal: React.FC<WebAdminPortalProps> = ({ onBackToApp }) =
                 </div>
                 <div>
                   <div className="text-sm font-bold text-emerald-200 flex items-center gap-2">
-                    Genuine End-to-End Encryption (E2EE) Verified
+                    Client-encrypted ledger backups
                     <span className="text-[10px] bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded font-mono">
                       AES-256-GCM
                     </span>
                   </div>
                   <div className="text-xs text-slate-300 mt-0.5">
-                    This Web Admin interface is cryptographically restricted from reading plaintext ledger entries, customer names, or transaction amounts. Only salted ciphertext blobs and transport metadata are stored on the server.
+                    Ledger backups are encrypted in the client before cloud upload. Admin counters are process-local telemetry and do not represent durable Firebase account totals.
                   </div>
                 </div>
               </div>

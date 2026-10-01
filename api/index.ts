@@ -175,6 +175,33 @@ function authenticateUser(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function safeEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function createAdminToken(): string | null {
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  if (!secret || secret.length < 32) return null;
+  const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
+  const signature = crypto.createHmac('sha256', secret).update(`admin:${expiresAt}`).digest('hex');
+  return `${expiresAt}.${signature}`;
+}
+
+function authenticateAdmin(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : '';
+  const [expiryText, signature] = token.split('.');
+  const expiresAt = Number(expiryText);
+  if (!secret || secret.length < 32 || !Number.isFinite(expiresAt) || expiresAt <= Date.now() || !signature) {
+    return res.status(401).json({ error: 'Admin session required.' });
+  }
+  const expected = crypto.createHmac('sha256', secret).update(`admin:${expiresAt}`).digest('hex');
+  if (!safeEqual(signature, expected)) return res.status(401).json({ error: 'Admin session invalid.' });
+  next();
+}
+
 // --- REAL-TIME GMAIL AUTH API ROUTES ---
 
 app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
@@ -486,17 +513,16 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   }
 
   const { username, email, password } = req.body;
-  const inputEmail = (email || username || '').trim().toLowerCase();
+  const inputEmail = String(email || username || '').trim().toLowerCase();
+  const expectedEmail = String(process.env.ADMIN_LOGIN_EMAIL || '').trim().toLowerCase();
+  const expectedPassword = process.env.ADMIN_LOGIN_PASSWORD || '';
+  if (!expectedEmail || !expectedPassword || !process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET.length < 32) {
+    return res.status(503).json({ error: 'Admin login is not configured.' });
+  }
 
-  if (inputEmail === 'admin@digitalkhata.in' && password === 'Admin@2026') {
-    const adminToken = generateSecureSessionToken();
-    activeSessions.set(adminToken, {
-      userId: 'admin_root',
-      role: 'SUPER_ADMIN',
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-    });
-
+  if (safeEqual(inputEmail, expectedEmail) && safeEqual(String(password || ''), expectedPassword)) {
+    const adminToken = createAdminToken();
+    if (!adminToken) return res.status(503).json({ error: 'Admin session signing is not configured.' });
     return res.json({
       success: true,
       token: adminToken,
@@ -507,7 +533,7 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   return res.status(401).json({ error: 'Galat Email ya Password. Details check karein.' });
 });
 
-app.get('/api/admin/metrics', (_req: Request, res: Response) => {
+app.get('/api/admin/metrics', authenticateAdmin, (_req: Request, res: Response) => {
   let totalBytes = 0;
   let activeDevCount = 0;
 
@@ -522,13 +548,13 @@ app.get('/api/admin/metrics', (_req: Request, res: Response) => {
     totalUsers: userDatabase.size,
     activeDevicesCount: activeDevCount,
     totalEncryptedSyncBytes: totalBytes,
-    e2eeIntegrityValid: true,
-    serverStatus: 'HEALTHY',
+    e2eeIntegrityValid: false,
+    serverStatus: 'DEGRADED',
     uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
   });
 });
 
-app.get('/api/admin/users', (_req: Request, res: Response) => {
+app.get('/api/admin/users', authenticateAdmin, (_req: Request, res: Response) => {
   const list = Array.from(userDatabase.values()).map((u) => ({
     id: u.id,
     phoneMasked: u.email.replace(/(.{2})(.*)(@.*)/, '$1***$3'),
@@ -543,7 +569,7 @@ app.get('/api/admin/users', (_req: Request, res: Response) => {
   return res.json({ users: list });
 });
 
-app.get('/api/admin/audit-logs', (_req: Request, res: Response) => {
+app.get('/api/admin/audit-logs', authenticateAdmin, (_req: Request, res: Response) => {
   return res.json({ logs: auditLogs.slice(0, 50) });
 });
 

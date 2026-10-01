@@ -27,7 +27,7 @@ export function base64ToBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-// Generate a random 12-word cryptographic recovery phrase or hex key
+// Generate a random 24-word cryptographic recovery phrase.
 const WORD_LIST = [
   'amber', 'breeze', 'cedar', 'delta', 'echo', 'frost', 'glacier', 'harbor',
   'island', 'jungle', 'kestrel', 'lagoon', 'meadow', 'nebula', 'oasis', 'pine',
@@ -36,10 +36,10 @@ const WORD_LIST = [
 ];
 
 export function generateRecoveryPhrase(): string {
-  const randomBytes = new Uint8Array(12);
+  const randomBytes = new Uint8Array(24);
   window.crypto.getRandomValues(randomBytes);
   const words: string[] = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < randomBytes.length; i++) {
     const index = randomBytes[i] % WORD_LIST.length;
     words.push(WORD_LIST[index]);
   }

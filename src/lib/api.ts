@@ -2,6 +2,7 @@ import { EncryptedPayload } from './crypto';
 import { AdminMetrics, AdminUserAccount, AdminAuditLog } from '../types/khata';
 
 const TOKEN_KEY = 'dk_session_token';
+let adminSessionToken: string | null = null;
 
 export function setAuthToken(token: string) {
   try {
@@ -177,24 +178,30 @@ export async function adminLoginApi(email: string, password: string): Promise<{ 
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || 'Admin login failed.');
   }
-  return res.json();
+  const data = await res.json();
+  adminSessionToken = data.token || null;
+  return data;
+}
+
+function adminHeaders(): Record<string, string> {
+  return adminSessionToken ? { Authorization: `Bearer ${adminSessionToken}` } : {};
 }
 
 export async function fetchAdminMetricsApi(): Promise<AdminMetrics> {
-  const res = await fetch('/api/admin/metrics');
+  const res = await fetch('/api/admin/metrics', { headers: adminHeaders() });
   if (!res.ok) throw new Error('Failed to fetch admin metrics');
   return res.json();
 }
 
 export async function fetchAdminUsersApi(): Promise<AdminUserAccount[]> {
-  const res = await fetch('/api/admin/users');
+  const res = await fetch('/api/admin/users', { headers: adminHeaders() });
   if (!res.ok) throw new Error('Failed to fetch admin users');
   const data = await res.json();
   return data.users || [];
 }
 
 export async function fetchAdminAuditLogsApi(): Promise<AdminAuditLog[]> {
-  const res = await fetch('/api/admin/audit-logs');
+  const res = await fetch('/api/admin/audit-logs', { headers: adminHeaders() });
   if (!res.ok) throw new Error('Failed to fetch audit logs');
   const data = await res.json();
   return data.logs || [];

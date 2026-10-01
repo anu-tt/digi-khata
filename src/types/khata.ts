@@ -55,7 +55,7 @@ export interface UserProfile {
   email?: string;
   avatar?: string;
   address?: string;
-  recoveryPhrase?: string; // Derived background key, not exposed to UI
+  recoveryPhrase?: string; // Local-only encryption key; never stored in the cloud profile
   pinHash?: string;
   pinSalt?: string;
   securityQuestion?: string;

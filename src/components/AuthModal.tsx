@@ -79,6 +79,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         : 'web';
 
       const { user: fbUser } = await signInWithGoogleFirebase();
+      if (!fbUser.emailVerified) throw new Error('Google account email must be verified.');
       const userId = fbUser.uid;
       const userEmail = fbUser.email || email.trim().toLowerCase();
       const userName = fbUser.displayName || name.trim() || userEmail.split('@')[0];
@@ -296,7 +297,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="flex items-center justify-center gap-1.5 mt-2">
               <span className="text-[10px] bg-emerald-50 text-emerald-800 px-3 py-1 rounded-full font-bold border border-emerald-200 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                End-to-End Encrypted Cloud Sync
+                Encrypted Ledger Cloud Backup
               </span>
             </div>
           </div>
