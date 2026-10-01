@@ -112,7 +112,6 @@ interface ServerAuditLog {
 const userDatabase = new Map<string, ServerUserRecord>();
 const activeSessions = new Map<string, ActiveSession>();
 const activeGmailCodes = new Map<string, ActiveGmailCode>();
-const recentVerificationDeliveries = new Map<string, { codePreview: string; timestamp: number }>();
 const auditLogs: ServerAuditLog[] = [];
 const startTime = Date.now();
 
@@ -158,27 +157,18 @@ function logAudit(
 // Auth Middleware
 function authenticateUser(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-
-  let session: ActiveSession | null = token ? activeSessions.get(token) || null : null;
-
-  if (!session) {
-    const email = req.body?.email || req.query?.email;
-    if (email && typeof email === 'string') {
-      token = 'auto_' + crypto.randomBytes(16).toString('hex');
-      session = {
-        userId: 'usr_' + email,
-        role: 'USER',
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      };
-      activeSessions.set(token, session);
-    }
-  }
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const session: ActiveSession | null = token ? activeSessions.get(token) || null : null;
 
   if (!session || Date.now() > session.expiresAt) {
     if (token) activeSessions.delete(token);
     return res.status(401).json({ error: 'Session expire ho gaya hai. Dobara login karein.' });
+  }
+
+  const email = req.body?.email || req.query?.email;
+  const account = Array.from(userDatabase.values()).find((user) => user.id === session.userId);
+  if (session.role === 'USER' && (!account || (typeof email === 'string' && normalizeEmail(email) !== account.email))) {
+    return res.status(403).json({ error: 'Account access denied.' });
   }
 
   (req as any).userSession = session;
@@ -224,36 +214,12 @@ app.post('/api/auth/send-gmail-code', (req: Request, res: Response) => {
     deliveredAt: new Date().toISOString(),
   });
 
-  recentVerificationDeliveries.set(cleanEmail, {
-    codePreview: code,
-    timestamp: Date.now(),
-  });
-
   return res.json({
     success: true,
     message: `Verification code aapke Gmail (${cleanEmail}) par bhej diya gaya hai.`,
     email: cleanEmail,
     expiresInSeconds: 300,
   });
-});
-
-app.get('/api/auth/realtime-delivery-check', (req: Request, res: Response) => {
-  const email = req.query.email as string;
-  if (!email) return res.status(400).json({ error: 'Email required' });
-
-  const cleanEmail = normalizeEmail(email);
-  const delivery = recentVerificationDeliveries.get(cleanEmail);
-
-  if (delivery && Date.now() - delivery.timestamp < 120000) {
-    return res.json({
-      delivered: true,
-      service: 'Google Mail Dispatcher',
-      notice: `Gmail verification code sent to ${cleanEmail}`,
-      verificationCode: delivery.codePreview,
-    });
-  }
-
-  return res.json({ delivered: false });
 });
 
 app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
@@ -287,7 +253,6 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
   }
 
   activeGmailCodes.delete(cleanEmail);
-  recentVerificationDeliveries.delete(cleanEmail);
 
   let user = userDatabase.get(cleanEmail);
   const deviceId = 'dev_' + crypto.randomBytes(6).toString('hex');
@@ -341,10 +306,10 @@ app.post('/api/auth/verify-gmail-code', (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/auth/google-signin', (req: Request, res: Response) => {
+app.post('/api/auth/google-signin', async (req: Request, res: Response) => {
   const { credential, email, name, avatar, businessName, deviceName, platform } = req.body;
 
-  if (!email && !credential) {
+  if (!credential || typeof credential !== 'string') {
     return res.status(400).json({ error: 'Google authentication data missing.' });
   }
 
@@ -352,25 +317,18 @@ app.post('/api/auth/google-signin', (req: Request, res: Response) => {
   let verifiedName = '';
   let verifiedAvatar = avatar || '';
 
-  if (credential && typeof credential === 'string') {
-    try {
-      const parts = credential.split('.');
-      if (parts.length === 3) {
-        const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
-        const parsed = JSON.parse(payloadJson);
-        if (parsed.email && parsed.email_verified) {
-          verifiedEmail = parsed.email;
-          verifiedName = parsed.name || parsed.given_name || '';
-          verifiedAvatar = parsed.picture || verifiedAvatar;
-        }
-      }
-    } catch {
-      // Fallback
+  try {
+    const verifyResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!verifyResponse.ok) return res.status(401).json({ error: 'Google account verify nahi ho paya.' });
+    const claims = await verifyResponse.json() as { email?: string; email_verified?: boolean | string; name?: string; given_name?: string; picture?: string };
+    if (!claims.email || (claims.email_verified !== true && claims.email_verified !== 'true')) {
+      return res.status(401).json({ error: 'Google account verify nahi ho paya.' });
     }
-  }
-
-  if (!verifiedEmail && email) {
-    verifiedEmail = normalizeEmail(email);
+    verifiedEmail = normalizeEmail(claims.email);
+    verifiedName = claims.name || claims.given_name || '';
+    verifiedAvatar = claims.picture || verifiedAvatar;
+  } catch {
+    return res.status(503).json({ error: 'Google verification service unavailable.' });
   }
 
   if (!verifiedEmail) {

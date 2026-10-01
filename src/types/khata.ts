@@ -75,6 +75,7 @@ export const SECURITY_QUESTIONS = [
 
 export interface AuthDevice {
   id: string;
+  userId?: string;
   name: string;
   platform: 'android' | 'ios' | 'web';
   lastActive: string;

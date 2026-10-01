@@ -92,7 +92,7 @@ export async function getStoredProfile(): Promise<UserProfile | null> {
     const req = store.getAll();
     req.onsuccess = () => {
       const list = req.result as UserProfile[];
-      resolve(list.length > 0 ? list[0] : null);
+      resolve(list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] || null);
     };
     req.onerror = () => reject(req.error);
   });
@@ -113,14 +113,14 @@ export async function clearStoredProfile(): Promise<void> {
 }
 
 // Parties (Customers & Suppliers) Operations
-export async function getAllParties(type?: 'customer' | 'supplier'): Promise<KhataParty[]> {
+export async function getAllParties(userId: string, type?: 'customer' | 'supplier'): Promise<KhataParty[]> {
   const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('parties', 'readonly');
     const store = tx.objectStore('parties');
     const req = store.getAll();
     req.onsuccess = () => {
-      let list = req.result as KhataParty[];
+      let list = (req.result as KhataParty[]).filter((party) => party.userId === userId);
       if (type) {
         list = list.filter((p) => p.type === type);
       }
@@ -170,14 +170,14 @@ export async function deleteParty(id: string): Promise<void> {
 }
 
 // Entries (Ledger Transactions) Operations
-export async function getAllEntries(partyId?: string): Promise<KhataEntry[]> {
+export async function getAllEntries(userId: string, partyId?: string): Promise<KhataEntry[]> {
   const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('entries', 'readonly');
     const store = tx.objectStore('entries');
     const req = store.getAll();
     req.onsuccess = () => {
-      let list = req.result as KhataEntry[];
+      let list = (req.result as KhataEntry[]).filter((entry) => entry.userId === userId);
       if (partyId) {
         list = list.filter((e) => e.partyId === partyId);
       }
@@ -208,14 +208,14 @@ export async function deleteEntry(id: string): Promise<void> {
 }
 
 // Reminders
-export async function getAllReminders(): Promise<KhataReminder[]> {
+export async function getAllReminders(userId: string): Promise<KhataReminder[]> {
   const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('reminders', 'readonly');
     const store = tx.objectStore('reminders');
     const req = store.getAll();
     req.onsuccess = () => {
-      const list = req.result as KhataReminder[];
+      const list = (req.result as KhataReminder[]).filter((reminder) => reminder.userId === userId);
       list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       resolve(list);
     };
@@ -232,18 +232,22 @@ export async function deleteReminder(id: string): Promise<void> {
 }
 
 // Devices
-export async function getAllDevices(): Promise<AuthDevice[]> {
+export async function getAllDevices(userId: string): Promise<AuthDevice[]> {
   const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('devices', 'readonly');
     const store = tx.objectStore('devices');
     const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as AuthDevice[]);
+    req.onsuccess = () => resolve((req.result as AuthDevice[]).filter((device) => device.userId === userId));
     req.onerror = () => reject(req.error);
   });
 }
 
 export async function saveDevice(device: AuthDevice): Promise<void> {
+  if (!device.userId) {
+    const profile = await getStoredProfile();
+    if (profile) device.userId = profile.id;
+  }
   await performTx('devices', 'readwrite', (store) => store.put(device));
 }
 
@@ -365,10 +369,10 @@ export async function exportLocalVault(): Promise<UserDecryptedVault | null> {
   const profile = await getStoredProfile();
   if (!profile) return null;
 
-  const parties = await getAllParties();
-  const entries = await getAllEntries();
-  const reminders = await getAllReminders();
-  const devices = await getAllDevices();
+  const parties = await getAllParties(profile.id);
+  const entries = await getAllEntries(profile.id);
+  const reminders = await getAllReminders(profile.id);
+  const devices = await getAllDevices(profile.id);
 
   return {
     profile,
@@ -385,12 +389,17 @@ export async function importDecryptedVault(vault: UserDecryptedVault): Promise<v
   const db = await getDB();
   const tx = db.transaction(['profile', 'parties', 'entries', 'reminders', 'devices'], 'readwrite');
 
-  // Clear existing
-  tx.objectStore('profile').clear();
-  tx.objectStore('parties').clear();
-  tx.objectStore('entries').clear();
-  tx.objectStore('reminders').clear();
-  tx.objectStore('devices').clear();
+  // Replace only this account's records; preserve other locally stored accounts.
+  const stores = ['parties', 'entries', 'reminders', 'devices'] as const;
+  for (const name of stores) {
+    const store = tx.objectStore(name);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      for (const record of request.result as Array<{ id: string; userId?: string }>) {
+        if (record.userId === vault.profile.id) store.delete(record.id);
+      }
+    };
+  }
 
   // Populate from vault
   if (vault.profile) {

@@ -57,7 +57,6 @@ import {
   calculatePartyBalance,
   calculateDashboardStats,
   exportLocalVault,
-  importDecryptedVault,
   wipeLocalDatabase,
   requestPersistentStorage,
 } from './lib/storage';
@@ -74,8 +73,7 @@ import {
   logOutFirebase,
 } from './lib/firebase';
 
-import { encryptData, decryptData } from './lib/crypto';
-import { pushEncryptedVaultApi, pullEncryptedVaultApi, clearAuthToken } from './lib/api';
+import { clearAuthToken } from './lib/api';
 
 // Route check for secret admin URL: only accessible via /ad-min, #ad-min or ?route=ad-min
 function checkIsAdminRoute(): boolean {
@@ -178,10 +176,10 @@ export function App() {
         setIsCreatePinOpen(true);
       }
 
-      let pList = await getAllParties();
-      let eList = await getAllEntries();
-      const rList = await getAllReminders();
-      const dList = await getAllDevices();
+      let pList = await getAllParties(storedProf.id);
+      let eList = await getAllEntries(storedProf.id);
+      const rList = await getAllReminders(storedProf.id);
+      const dList = await getAllDevices(storedProf.id);
 
       // If local database is empty but user is logged in, attempt to fetch from Firestore Cloud
       if (pList.length === 0 && eList.length === 0 && storedProf.id && isOnline) {
@@ -249,22 +247,6 @@ export function App() {
         console.warn('Firestore sync note:', fbErr);
       }
 
-      // Sync encrypted payload to server vault
-      const vault = await exportLocalVault();
-      if (vault) {
-        const secretKey = profile.recoveryPhrase || profile.email || profile.id;
-        const encryptedPayload = await encryptData(vault, secretKey);
-        const currentDev = devices.find((d) => d.isCurrent) || devices[0];
-
-        await pushEncryptedVaultApi({
-          email: profile.email || profile.phone || profile.id,
-          deviceId: currentDev?.id || 'dev_primary',
-          encryptedPayload,
-          approximateBytes: encryptedPayload.ciphertext.length,
-          totalEntriesCount: entries.length,
-        });
-      }
-
       setSyncState('success');
       setTimeout(() => setSyncState('idle'), 4000);
     } catch (err) {
@@ -293,19 +275,7 @@ export function App() {
       }
     } catch {}
 
-    const res = await pullEncryptedVaultApi(profile.email || profile.phone || profile.id);
-    if (!res || !res.encryptedPayload) {
-      throw new Error('Cloud par koi backup nahi mila.');
-    }
-
-    const secretKey = profile.recoveryPhrase || profile.email || profile.id;
-    const decryptedVault = await decryptData<any>(res.encryptedPayload, secretKey);
-    if (!decryptedVault || !decryptedVault.parties) {
-      throw new Error('Decryption asafal rahi.');
-    }
-
-    await importDecryptedVault(decryptedVault);
-    await reloadData();
+    throw new Error('Cloud par koi backup nahi mila.');
   };
 
   // 4. Offline Decrypted JSON Export
@@ -323,6 +293,7 @@ export function App() {
 
   // 5. Auth Success handler
   const handleAuthSuccess = async (newProfile: UserProfile, device: AuthDevice) => {
+    device.userId = newProfile.id;
     await saveStoredProfile(newProfile);
     await saveDevice(device);
     setProfile(newProfile);

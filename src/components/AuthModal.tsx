@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import {
   signInWithGoogleFirebase,
+  signInWithEmailPassword,
+  createEmailPasswordAccount,
   saveUserProfileToFirestore,
   getUserProfileFromFirestore,
 } from '../lib/firebase';
-import { googleSignInApi } from '../lib/api';
 import { UserProfile, AuthDevice } from '../types/khata';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -24,6 +25,21 @@ interface AuthModalProps {
   isOpen: boolean;
   onSuccess: (profile: UserProfile, device: AuthDevice) => void;
   onContinueOffline: (profile: UserProfile) => void;
+}
+
+const DEVICE_ID_KEY = 'dk_device_id';
+
+function getLocalDeviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = 'dev_' + crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return 'dev_' + Math.random().toString(36).slice(2, 12);
+  }
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -62,68 +78,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         ? 'android'
         : 'web';
 
-      let fbUser: any = null;
+      const { user: fbUser } = await signInWithGoogleFirebase();
+      const userId = fbUser.uid;
+      const userEmail = fbUser.email || email.trim().toLowerCase();
+      const userName = fbUser.displayName || name.trim() || userEmail.split('@')[0];
+      const userAvatar = fbUser.photoURL || undefined;
+
+      let existingProf: UserProfile | null = null;
       try {
-        const fbRes = await signInWithGoogleFirebase();
-        fbUser = fbRes.user;
-      } catch (fbErr: any) {
-        console.warn('Google sign-in fallback:', fbErr);
-      }
+        existingProf = await getUserProfileFromFirestore(userId);
+      } catch {}
 
-      let profile: UserProfile;
+      const profile: UserProfile = existingProf || {
+        id: userId,
+        email: userEmail,
+        name: userName,
+        businessName: businessName.trim() || undefined,
+        avatar: userAvatar,
+        isBiometricEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-      if (fbUser) {
-        const userId = fbUser.uid;
-        const userEmail = fbUser.email || email.trim().toLowerCase();
-        const userName = fbUser.displayName || name.trim() || userEmail.split('@')[0];
-        const userAvatar = fbUser.photoURL || undefined;
-
-        let existingProf: UserProfile | null = null;
-        try {
-          existingProf = await getUserProfileFromFirestore(userId);
-        } catch {}
-
-        profile = existingProf || {
-          id: userId,
-          email: userEmail,
-          name: userName,
-          businessName: businessName.trim() || undefined,
-          avatar: userAvatar,
-          isBiometricEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        try {
-          await saveUserProfileToFirestore(profile);
-        } catch {}
-      } else {
-        const res = await googleSignInApi({
-          email: email.trim().toLowerCase() || 'user@digitalkhata.in',
-          name: name.trim() || 'Vyapari',
-          businessName: businessName.trim() || undefined,
-          deviceName,
-          platform,
-        });
-
-        profile = {
-          id: res.user.id,
-          email: res.user.email,
-          name: res.user.name,
-          businessName: res.user.businessName,
-          avatar: res.user.avatar,
-          isBiometricEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        try {
-          await saveUserProfileToFirestore(profile);
-        } catch {}
-      }
+      try {
+        await saveUserProfileToFirestore(profile);
+      } catch {}
 
       const device: AuthDevice = {
-        id: 'dev_' + Math.random().toString(36).substring(2, 9),
+        id: getLocalDeviceId(),
         name: deviceName,
         platform: platform as any,
         lastActive: new Date().toISOString(),
@@ -153,8 +135,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // 3. Password Submit / Account Login or Creation
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password || password.length < 4) {
-      setErrorMsg('Kripya kam se kam 4 ank ka password enter karein.');
+    if (!password || password.length < 6) {
+      setErrorMsg('Password mein kam se kam 6 characters hone chahiye.');
       return;
     }
 
@@ -163,8 +145,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // If new account and name is not provided yet, go to profile mode
-    if (isNewAccount && !name.trim()) {
+    // Account creation is completed from the profile form.
+    if (isNewAccount) {
       setMode('profile');
       return;
     }
@@ -186,12 +168,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         ? 'android'
         : 'web';
 
-      const userId = 'usr_' + email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-      
-      let existingProf: UserProfile | null = null;
-      try {
-        existingProf = await getUserProfileFromFirestore(userId);
-      } catch {}
+      const fbUser = await signInWithEmailPassword(email.trim().toLowerCase(), password);
+      const userId = fbUser.uid;
+      const existingProf = await getUserProfileFromFirestore(userId);
 
       const profile: UserProfile = existingProf || {
         id: userId,
@@ -208,7 +187,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } catch {}
 
       const device: AuthDevice = {
-        id: 'dev_' + Math.random().toString(36).substring(2, 9),
+        id: getLocalDeviceId(),
         name: deviceName,
         platform: platform as any,
         lastActive: new Date().toISOString(),
@@ -231,8 +210,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg('Kripya apna naam enter karein.');
       return;
     }
-    if (!password || password.length < 4) {
-      setErrorMsg('Kripya naya password set karein (min 4 characters).');
+    if (!password || password.length < 6) {
+      setErrorMsg('Naye password mein kam se kam 6 characters hone chahiye.');
       setMode('password');
       return;
     }
@@ -250,7 +229,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ? 'android'
       : 'web';
 
-    const userId = 'usr_' + email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    let fbUser;
+    try {
+      fbUser = await createEmailPasswordAccount(email.trim().toLowerCase(), password);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Account create nahi ho paya. Email ya password check karein.');
+      return;
+    }
+    const userId = fbUser.uid;
 
     const profile: UserProfile = {
       id: userId,
@@ -270,7 +256,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     const device: AuthDevice = {
-      id: 'dev_' + Math.random().toString(36).substring(2, 9),
+      id: getLocalDeviceId(),
       name: deviceName,
       platform: platform as any,
       lastActive: new Date().toISOString(),

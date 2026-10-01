@@ -7,12 +7,8 @@ service cloud.firestore {
     }
 
     // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
     function isOwner(userId) {
-      return true;
+      return request.auth != null && request.auth.uid == userId;
     }
 
     function isValidId(id) {
@@ -38,9 +34,11 @@ service cloud.firestore {
              data.userId == userId &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              (data.type == 'customer' || data.type == 'supplier') &&
-             data.balance is number &&
              (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
-             (!('address' in data) || (data.address is string && data.address.size() <= 200));
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('isArchived' in data) || data.isArchived is bool) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
     // Transaction document validation
@@ -49,10 +47,13 @@ service cloud.firestore {
              data.userId == userId &&
              data.partyId is string && data.partyId.size() <= 128 &&
              data.amount is number && data.amount >= 0 &&
-             (data.type == 'give' || data.type == 'got') &&
+             (data.type == 'credit' || data.type == 'debit') &&
              data.date is string && data.date.size() <= 64 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
-             (!('paymentMode' in data) || (data.paymentMode is string && data.paymentMode.size() <= 50));
+             (!('attachments' in data) || data.attachments is list) &&
+             (!('syncStatus' in data) || data.syncStatus in ['synced', 'pending', 'failed']) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
     // Users Collection

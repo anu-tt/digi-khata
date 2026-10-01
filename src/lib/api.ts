@@ -42,21 +42,6 @@ export async function sendGmailCodeApi(email: string): Promise<{
   return res.json();
 }
 
-// Check Realtime In-App Delivery for local testing
-export async function checkRealtimeDeliveryApi(email: string): Promise<{
-  delivered: boolean;
-  verificationCode?: string;
-  notice?: string;
-}> {
-  try {
-    const res = await fetch(`/api/auth/realtime-delivery-check?email=${encodeURIComponent(email)}`);
-    if (!res.ok) return { delivered: false };
-    return res.json();
-  } catch {
-    return { delivered: false };
-  }
-}
-
 // 2. Verify Gmail Code
 export async function verifyGmailCodeApi(params: {
   email: string;
