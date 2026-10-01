@@ -22,6 +22,7 @@ import {
 import { UserProfile, SECURITY_QUESTIONS } from '../types/khata';
 import { hashPIN, generateSalt } from '../lib/crypto';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { TytanDoorLogo } from './TytanDoorLogo';
 import {
   requestPersistentStorage,
   getStorageEstimate,
@@ -287,6 +288,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* 1. Main Settings Menu */}
         {activeSection === 'menu' && (
           <div className="space-y-3">
+            {/* Company Badge Card */}
+            <div className="p-4 bg-white text-slate-900 rounded-2xl flex items-center justify-between border border-slate-200/80 shadow-xs">
+              <TytanDoorLogo variant="full" size="md" lightBackground={true} />
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
+                  Official Ledger
+                </span>
+              </div>
+            </div>
+
             {/* Profile Card */}
             <button
               onClick={() => setActiveSection('profile')}

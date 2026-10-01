@@ -52,21 +52,21 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
       )}
 
       {variant === 'banner' && (
-        <div className="mx-3 sm:mx-4 mt-3 bg-gradient-to-r from-emerald-900 via-teal-950 to-slate-900 text-white rounded-2xl p-3 sm:p-3.5 shadow-md flex items-center justify-between gap-3 border border-emerald-700/50">
+        <div className="mx-3 sm:mx-4 mt-3 bg-white text-slate-800 rounded-2xl p-3 sm:p-3.5 shadow-xs flex items-center justify-between gap-3 border border-slate-200">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100">
+              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-bold text-white truncate">Digital Khata Ko Phone Par Install Karein</div>
-              <div className="text-[10px] text-emerald-200/80 mt-0.5 truncate">
-                Bina app store ke home screen par chalayein (100% Offline)
+              <div className="text-xs font-bold text-slate-900 truncate">Tytan Khatabook Ko Phone Par Install Karein</div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Home screen par add karein (100% Offline Fast App)
               </div>
             </div>
           </div>
           <button
             onClick={handleInstallClick}
-            className="px-3 py-1.5 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black shrink-0 shadow-sm transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap"
+            className="px-3 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shrink-0 shadow-2xs transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Install

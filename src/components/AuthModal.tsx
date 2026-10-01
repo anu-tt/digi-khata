@@ -18,6 +18,7 @@ import { googleSignInApi } from '../lib/api';
 import { UserProfile, AuthDevice } from '../types/khata';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import { PWAInstallButton } from './PWAInstallButton';
+import { TytanDoorLogo } from './TytanDoorLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -300,20 +301,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full bg-slate-900 text-slate-800 overflow-y-auto">
+    <div className="flex-1 flex flex-col w-full h-full bg-slate-900/60 backdrop-blur-sm text-slate-800 overflow-y-auto">
       <div className="max-w-md w-full mx-auto my-auto p-4 sm:p-6">
-        <div className="bg-white text-slate-800 w-full rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-scale-in">
+        <div className="bg-white text-slate-800 w-full rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col animate-scale-in">
           {/* Header */}
-          <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-950 text-white p-5 sm:p-6 text-center relative border-b border-emerald-900/60">
-            <div className="w-12 h-12 rounded-2xl rupee-coin-3d animate-coin-3d flex items-center justify-center mx-auto mb-2.5 shadow-md border border-emerald-400/40">
-              <span className="text-white font-black text-xl font-sans">₹</span>
-            </div>
-            <h2 className="text-xl font-extrabold tracking-tight">Digital Khata</h2>
-            <p className="text-emerald-200/90 text-xs mt-0.5">Secure Cloud Backup & Ledger</p>
+          <div className="bg-gradient-to-b from-slate-50 to-white text-slate-900 p-6 sm:p-7 text-center relative border-b border-slate-200/80 flex flex-col items-center">
+            <TytanDoorLogo variant="stacked" size="lg" lightBackground={true} />
             <div className="flex items-center justify-center gap-1.5 mt-2">
-              <span className="text-[10px] bg-emerald-900/90 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold border border-emerald-700/60 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                100% Safe & Secure Cloud Sync
+              <span className="text-[10px] bg-emerald-50 text-emerald-800 px-3 py-1 rounded-full font-bold border border-emerald-200 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                End-to-End Encrypted Cloud Sync
               </span>
             </div>
           </div>

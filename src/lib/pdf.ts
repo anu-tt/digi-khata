@@ -39,18 +39,18 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
 
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Header Banner
-  doc.setFillColor(6, 95, 70); // Deep emerald green
+  // Header Banner - Clean Light Slate & Red Accent Theme
+  doc.setFillColor(30, 41, 59); // Slate 800
   doc.rect(0, 0, pageWidth, 32, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('KHATA STATEMENT', 14, 14);
+  doc.text('TYTAN KHATABOOK STATEMENT', 14, 14);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Aapka Khata, Aapke Control Mein — Simple. Secure. Private.', 14, 21);
+  doc.text('TYTAN KHATABOOK — Official Digital Ledger', 14, 21);
 
   // Business / User Info (top right)
   const businessTitle = profile.businessName || profile.name;
