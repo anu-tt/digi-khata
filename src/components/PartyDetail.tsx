@@ -66,6 +66,8 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
 
   const net = summary.netBalance;
   const isCustomer = party.type === 'customer';
+  const debitLabel = isCustomer ? 'Udhaar Diya (Debit)' : 'Maal Kharida (Debit)';
+  const creditLabel = isCustomer ? 'Jama Mila (Credit)' : 'Payment Diya (Credit)';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-slate-50 text-slate-800 relative overflow-hidden">
@@ -272,7 +274,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <span>{e.description || (isJama ? 'Jama Mila' : 'Udhaar Diya')}</span>
+                      <span>{e.description || (isCustomer ? (isJama ? 'Jama Mila' : 'Udhaar Diya') : (isJama ? 'Payment Diya' : 'Maal Kharida'))}</span>
                       {e.attachments && e.attachments.length > 0 && (
                         <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
                           <ImageIcon className="w-2.5 h-2.5" />
@@ -292,10 +294,10 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                       isJama ? 'text-emerald-700' : 'text-rose-700'
                     }`}
                   >
-                    {isJama ? '+' : '-'} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {isCustomer ? (isJama ? '+' : '-') : (isJama ? '-' : '+')} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[10px] font-semibold text-slate-400">
-                    {isJama ? 'Jama (Credit)' : 'Udhaar (Debit)'}
+                    {isCustomer ? (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)') : (isJama ? 'Payment (Credit)' : 'Purchase (Debit)')}
                   </div>
                 </div>
               </div>
@@ -306,22 +308,22 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
 
       {/* Docked Bottom Action Buttons for Entry */}
       <div className="p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center gap-2.5 shrink-0 z-30 shadow-lg">
-        {/* Red Udhaar Diya Button */}
+        {/* Debit entry */}
         <button
           onClick={() => onOpenAddEntry(party.id, 'debit')}
           className="flex-1 py-3 px-3 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-2xl font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
         >
           <ArrowUpRight className="w-4 h-4" />
-          <span>- Udhaar Diya (Debit)</span>
+          <span>{isCustomer ? '-' : '+'} {debitLabel}</span>
         </button>
 
-        {/* Green Jama Mila Button */}
+        {/* Credit entry */}
         <button
           onClick={() => onOpenAddEntry(party.id, 'credit')}
           className="flex-1 py-3 px-3 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.98] text-white rounded-2xl font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
         >
           <ArrowDownLeft className="w-4 h-4" />
-          <span>+ Jama Mila (Credit)</span>
+          <span>{isCustomer ? '+' : '-'} {creditLabel}</span>
         </button>
       </div>
     </div>

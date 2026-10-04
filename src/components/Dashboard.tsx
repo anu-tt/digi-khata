@@ -346,6 +346,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {recentEntries.map((e) => {
                 const party = parties.find((p) => p.id === e.partyId);
                 const isJama = e.type === 'credit';
+                const isSupplier = party?.type === 'supplier';
                 return (
                   <div
                     key={e.id}
@@ -374,7 +375,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           )}
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          {e.date} • {e.description || (isJama ? 'Jama Mila' : 'Udhaar Diya')}
+                          {e.date} • {e.description || (isSupplier ? (isJama ? 'Payment Diya' : 'Maal Kharida') : (isJama ? 'Jama Mila' : 'Udhaar Diya'))}
                         </div>
                       </div>
                     </div>
@@ -385,10 +386,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           isJama ? 'text-emerald-700' : 'text-rose-700'
                         }`}
                       >
-                        {isJama ? '+' : '-'} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {party?.type === 'supplier' ? (isJama ? '-' : '+') : (isJama ? '+' : '-')} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
                       <div className="text-[10px] font-semibold text-slate-400">
-                        {isJama ? 'Jama (Credit)' : 'Udhaar (Debit)'}
+                        {isSupplier ? (isJama ? 'Payment (Credit)' : 'Purchase (Debit)') : (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)')}
                       </div>
                     </div>
                   </div>

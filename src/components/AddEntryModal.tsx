@@ -120,6 +120,9 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
   };
 
   const selectedParty = parties.find((p) => p.id === selectedPartyId);
+  const isSupplier = selectedParty?.type === 'supplier';
+  const debitLabel = isSupplier ? 'Maal Kharida (Debit)' : 'Udhaar Diya (Debit)';
+  const creditLabel = isSupplier ? 'Payment Diya (Credit)' : 'Jama Mila (Credit)';
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -140,7 +143,9 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">
-                {entryType === 'credit' ? '+ Jama Mila (Credit)' : '- Udhaar Diya (Debit)'}
+                {entryType === 'credit'
+                  ? `${isSupplier ? '-' : '+'} ${creditLabel}`
+                  : `${isSupplier ? '+' : '-'} ${debitLabel}`}
               </h2>
               <div className="text-[11px] text-white/80">
                 {selectedParty ? `${selectedParty.name} ke khate mein` : 'Nayi entry karein'}
@@ -183,7 +188,7 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
             </div>
           )}
 
-          {/* Entry Type Toggle (Jama / Udhaar) */}
+          {/* Entry type has party-specific meaning, while stored credit/debit stays consistent. */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
             <button
               type="button"
@@ -195,7 +200,7 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
               }`}
             >
               <ArrowUpRight className="w-3.5 h-3.5" />
-              Udhaar Diya (Debit)
+              {debitLabel}
             </button>
             <button
               type="button"
@@ -207,7 +212,7 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
               }`}
             >
               <ArrowDownLeft className="w-3.5 h-3.5" />
-              Jama Mila (Credit)
+              {creditLabel}
             </button>
           </div>
 

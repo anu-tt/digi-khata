@@ -56,6 +56,8 @@ import {
   getAllDevices,
   saveDevice,
   calculatePartyBalance,
+  upgradeLocalSupplierLedger,
+  upgradeSupplierEntryTypes,
   calculateDashboardStats,
   exportLocalVault,
   importDecryptedVault,
@@ -194,6 +196,7 @@ export function App() {
         setIsCreatePinOpen(true);
       }
 
+      await upgradeLocalSupplierLedger(storedProf.id);
       let pList = await getAllParties(storedProf.id);
       let eList = await getAllEntries(storedProf.id);
       const rList = await getAllReminders(storedProf.id);
@@ -214,7 +217,7 @@ export function App() {
             const legacy = await fetchUserFirestoreData(storedProf.id);
             if (legacy.parties.length || legacy.entries.length) {
               for (const party of legacy.parties) await saveParty(party);
-              for (const entry of legacy.entries) await saveEntry(entry);
+              for (const entry of upgradeSupplierEntryTypes(legacy.parties, legacy.entries)) await saveEntry(entry);
               const vault = await exportLocalVault();
               if (vault) await saveEncryptedVaultToFirestore(storedProf.id, await encryptData(vault, localSecret));
               pList = legacy.parties;
@@ -301,7 +304,7 @@ export function App() {
         }
         legacyAccountsToDelete = legacyIds;
         for (const party of legacyParties) await saveParty({ ...party, userId: profile.id });
-        for (const entry of legacyEntries) await saveEntry({ ...entry, userId: profile.id });
+        for (const entry of upgradeSupplierEntryTypes(legacyParties, legacyEntries)) await saveEntry({ ...entry, userId: profile.id });
       }
       const vault = await exportLocalVault();
       if (!vault) throw new Error('Local backup unavailable.');
@@ -337,7 +340,7 @@ export function App() {
     const legacy = await fetchUserFirestoreData(profile.id);
     if (!legacy.parties.length && !legacy.entries.length) throw new Error('Cloud par koi backup nahi mila.');
     for (const party of legacy.parties) await saveParty(party);
-    for (const entry of legacy.entries) await saveEntry(entry);
+    for (const entry of upgradeSupplierEntryTypes(legacy.parties, legacy.entries)) await saveEntry(entry);
     const migratedVault = await exportLocalVault();
     if (!migratedVault || !profile.recoveryPhrase) throw new Error('Cloud recovery key missing.');
     await saveEncryptedVaultToFirestore(profile.id, await encryptData(migratedVault, profile.recoveryPhrase));
@@ -426,7 +429,7 @@ export function App() {
           }
           if (legacyParties.length || legacyEntries.length) {
             for (const party of legacyParties) await saveParty({ ...party, userId: newProfile.id });
-            for (const entry of legacyEntries) await saveEntry({ ...entry, userId: newProfile.id });
+            for (const entry of upgradeSupplierEntryTypes(legacyParties, legacyEntries)) await saveEntry({ ...entry, userId: newProfile.id });
             const vault = await exportLocalVault();
             if (vault) await saveEncryptedVaultToFirestore(newProfile.id, await encryptData(vault, newProfile.recoveryPhrase));
             for (const legacyId of legacyUserIds) await deleteLegacyFirestoreAccount(legacyId);

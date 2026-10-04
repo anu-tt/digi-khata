@@ -287,6 +287,7 @@ export const DesktopKhataView: React.FC<DesktopKhataViewProps> = ({
                     {filteredRecentEntries.map((e) => {
                       const party = parties.find((p) => p.id === e.partyId);
                       const isJama = e.type === 'credit';
+                      const isSupplier = party?.type === 'supplier';
                       return (
                         <tr
                           key={e.id}
@@ -308,7 +309,7 @@ export const DesktopKhataView: React.FC<DesktopKhataViewProps> = ({
                                   : 'bg-rose-100 text-rose-800 border border-rose-200'
                               }`}
                             >
-                              {isJama ? 'Jama (Credit)' : 'Udhaar (Debit)'}
+                              {isSupplier ? (isJama ? 'Payment (Credit)' : 'Purchase (Debit)') : (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)')}
                             </span>
                           </td>
                           <td
@@ -316,7 +317,7 @@ export const DesktopKhataView: React.FC<DesktopKhataViewProps> = ({
                               isJama ? 'text-emerald-700' : 'text-rose-700'
                             }`}
                           >
-                            {isJama ? '+' : '-'} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {isSupplier ? (isJama ? '-' : '+') : (isJama ? '+' : '-')} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {e.attachments && e.attachments.length > 0 ? (

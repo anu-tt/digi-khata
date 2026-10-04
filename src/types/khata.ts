@@ -127,6 +127,7 @@ export interface UserDecryptedVault {
   reminders: KhataReminder[];
   devices: AuthDevice[];
   updatedAt: string;
+  ledgerVersion?: number;
 }
 
 // Admin panel types (strictly ZERO access to plaintext ledger contents)

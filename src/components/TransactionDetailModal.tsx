@@ -32,6 +32,10 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   const party = parties.find((p) => p.id === entry.partyId);
   const isJama = entry.type === 'credit';
+  const isSupplier = party?.type === 'supplier';
+  const entryLabel = isSupplier
+    ? (isJama ? 'Payment Diya (Credit)' : 'Maal Kharida (Debit)')
+    : (isJama ? 'Jama Mila (Credit)' : 'Udhaar Diya (Debit)');
 
   const handleDelete = () => {
     if (confirm('Kya aap sach mein yeh entry delete karna chahte hain?')) {
@@ -59,7 +63,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">
-                {isJama ? 'Jama (Credit) Entry' : 'Udhaar (Debit) Entry'}
+                {entryLabel}
               </h2>
               <div className="text-[11px] text-white/80">
                 {party ? party.name : 'Unknown Party'}
@@ -79,14 +83,14 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           {/* Amount Card */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-center">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {isJama ? 'Aapko Mila (Jama)' : 'Aapne Diya (Udhaar)'}
+              {isSupplier ? (isJama ? 'Supplier ko payment diya' : 'Supplier se maal kharida') : (isJama ? 'Aapko Mila (Jama)' : 'Aapne Diya (Udhaar)')}
             </div>
             <div
               className={`text-3xl font-extrabold mt-1 tracking-tight ${
                 isJama ? 'text-emerald-700' : 'text-rose-700'
               }`}
             >
-              {isJama ? '+' : '-'} ₹{entry.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {isSupplier ? (isJama ? '-' : '+') : (isJama ? '+' : '-')} ₹{entry.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </div>
           </div>
 

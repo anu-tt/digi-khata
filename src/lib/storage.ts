@@ -324,8 +324,8 @@ export function calculatePartyBalance(
       status = 'barabar'; // Hisab Barabar
     }
   } else {
-    // For Supplier: Credit (Udhaar liya) is payable by you, Debit (Payment diya) reduces payable
-    netBalance = Math.round((totalCredit - totalDebit) * 100) / 100;
+    // For Supplier: Debit (purchase / udhaar liya) increases payable; Credit (payment) reduces it.
+    netBalance = Math.round((totalDebit - totalCredit) * 100) / 100;
     if (netBalance > 0) {
       status = 'dena_hai'; // Aapko Dena Hai
     } else if (netBalance < 0) {
@@ -414,11 +414,64 @@ export async function exportLocalVault(): Promise<UserDecryptedVault | null> {
     reminders,
     devices,
     updatedAt: new Date().toISOString(),
+    ledgerVersion: 2,
   };
 }
 
+/** Upgrade legacy supplier records whose credit/debit meanings were customer-oriented. */
+export function upgradeSupplierEntryTypes(parties: KhataParty[], entries: KhataEntry[]): KhataEntry[] {
+  const supplierIds = new Set(parties.filter((party) => party.type === 'supplier').map((party) => party.id));
+  return entries.map((entry) => supplierIds.has(entry.partyId)
+    ? { ...entry, type: entry.type === 'credit' ? 'debit' : 'credit' }
+    : entry);
+}
+
+export async function upgradeSupplierLedgerVault(vault: UserDecryptedVault): Promise<UserDecryptedVault> {
+  if ((vault.ledgerVersion ?? 1) >= 2) return vault;
+  return {
+    ...vault,
+    ledgerVersion: 2,
+    entries: upgradeSupplierEntryTypes(vault.parties, vault.entries),
+  };
+}
+
+export async function upgradeLocalSupplierLedger(userId: string): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(['parties', 'entries', 'metadata'], 'readwrite');
+  const metadata = tx.objectStore('metadata');
+  const migrationKey = `supplier-ledger:v2:${userId}`;
+  const marker = metadata.get(migrationKey);
+  marker.onsuccess = () => {
+    if (marker.result) return;
+    const partyRequest = tx.objectStore('parties').getAll();
+    const entryRequest = tx.objectStore('entries').getAll();
+    let parties: KhataParty[] | undefined;
+    let entries: KhataEntry[] | undefined;
+    const migrate = () => {
+      if (!parties || !entries) return;
+      const supplierIds = new Set(parties.filter((party) => party.userId === userId && party.type === 'supplier').map((party) => party.id));
+      const entryStore = tx.objectStore('entries');
+      for (const entry of entries) {
+        if (entry.userId === userId && supplierIds.has(entry.partyId)) {
+          entryStore.put({ ...entry, type: entry.type === 'credit' ? 'debit' : 'credit' });
+        }
+      }
+      metadata.put({ key: migrationKey, value: true });
+    };
+    partyRequest.onsuccess = () => { parties = partyRequest.result; migrate(); };
+    entryRequest.onsuccess = () => { entries = entryRequest.result; migrate(); };
+  };
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
 // Import decrypted vault into local database (e.g. after cloud restore or device switch)
-export async function importDecryptedVault(vault: UserDecryptedVault): Promise<void> {
+export async function importDecryptedVault(inputVault: UserDecryptedVault): Promise<void> {
+  const vault = await upgradeSupplierLedgerVault(inputVault);
+  Object.assign(inputVault, vault);
   const db = await getDB();
   const tx = db.transaction(['profile', 'parties', 'entries', 'reminders', 'devices'], 'readwrite');
 

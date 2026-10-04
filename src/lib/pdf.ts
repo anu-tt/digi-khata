@@ -116,8 +116,8 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
 
   doc.text('Date', 18, yPos + 6);
   doc.text('Description / Vivran', 45, yPos + 6);
-  doc.text('Jama (+) Credit', 115, yPos + 6, { align: 'right' });
-  doc.text('Udhaar (-) Debit', 152, yPos + 6, { align: 'right' });
+  doc.text(party.type === 'supplier' ? 'Payment (Credit)' : 'Jama (Credit)', 115, yPos + 6, { align: 'right' });
+  doc.text(party.type === 'supplier' ? 'Purchase (Debit)' : 'Udhaar (Debit)', 152, yPos + 6, { align: 'right' });
   doc.text('Balance', pageWidth - 18, yPos + 6, { align: 'right' });
 
   yPos += 13;
@@ -131,18 +131,10 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
 
     if (entry.type === 'credit') {
       totalCredit += entry.amount;
-      if (party.type === 'customer') {
-        runningBalance -= entry.amount;
-      } else {
-        runningBalance += entry.amount;
-      }
+      runningBalance -= entry.amount;
     } else {
       totalDebit += entry.amount;
-      if (party.type === 'customer') {
-        runningBalance += entry.amount;
-      } else {
-        runningBalance -= entry.amount;
-      }
+      runningBalance += entry.amount;
     }
 
     // Check page overflow
@@ -210,8 +202,8 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 65, 85);
 
-  doc.text(`Total Jama (Credit): Rs. ${totalCredit.toFixed(2)}`, 20, yPos + 8);
-  doc.text(`Total Udhaar (Debit): Rs. ${totalDebit.toFixed(2)}`, 20, yPos + 16);
+  doc.text(`${party.type === 'supplier' ? 'Total Supplier Payments (Credit)' : 'Total Jama (Credit)'}: Rs. ${totalCredit.toFixed(2)}`, 20, yPos + 8);
+  doc.text(`${party.type === 'supplier' ? 'Total Purchases (Debit)' : 'Total Udhaar (Debit)'}: Rs. ${totalDebit.toFixed(2)}`, 20, yPos + 16);
 
   // Final Net Status
   doc.setFontSize(12);
