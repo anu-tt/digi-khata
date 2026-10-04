@@ -18,7 +18,7 @@ import {
 } from '../lib/firebase';
 import { UserProfile, AuthDevice } from '../types/khata';
 import { generateSalt, hashPIN } from '../lib/crypto';
-import { getStoredProfileByEmail, saveStoredProfile } from '../lib/storage';
+import { getStoredProfileByEmail, getStoredProfile, saveStoredProfile } from '../lib/storage';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import { PWAInstallButton } from './PWAInstallButton';
 import { TytanDoorLogo } from './TytanDoorLogo';
@@ -87,23 +87,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const userName = fbUser.displayName || name.trim() || userEmail.split('@')[0];
       const userAvatar = fbUser.photoURL || undefined;
 
-      let existingProf: UserProfile | null = null;
+      const localStored = await getStoredProfile();
+      const existingByEmail = await getStoredProfileByEmail(userEmail);
+      let cloudProf: UserProfile | null = null;
       try {
-        existingProf = await getUserProfileFromFirestore(userId);
+        cloudProf = await getUserProfileFromFirestore(userId);
       } catch {}
 
-      const profile: UserProfile = existingProf || {
+      const baseProfile = cloudProf || existingByEmail || localStored;
+
+      const profile: UserProfile = {
         id: userId,
         email: userEmail,
-        name: userName,
-        businessName: businessName.trim() || undefined,
-        avatar: userAvatar,
-        isBiometricEnabled: false,
-        createdAt: new Date().toISOString(),
+        name: baseProfile?.name || userName,
+        businessName: baseProfile?.businessName || businessName.trim() || undefined,
+        address: baseProfile?.address || undefined,
+        avatar: userAvatar || baseProfile?.avatar,
+        pinHash: baseProfile?.pinHash,
+        pinSalt: baseProfile?.pinSalt,
+        securityQuestion: baseProfile?.securityQuestion,
+        securityAnswerHash: baseProfile?.securityAnswerHash,
+        passwordHash: baseProfile?.passwordHash,
+        passwordSalt: baseProfile?.passwordSalt,
+        isBiometricEnabled: baseProfile?.isBiometricEnabled || false,
+        createdAt: baseProfile?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       try {
+        await saveStoredProfile(profile);
         await saveUserProfileToFirestore(profile);
       } catch {}
 
