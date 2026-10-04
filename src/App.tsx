@@ -232,8 +232,6 @@ export function App() {
       // Check 6-digit PIN on app opening: if PIN set, lock screen activates immediately!
       if (storedProf.pinHash) {
         setIsLocked(true);
-      } else {
-        setIsCreatePinOpen(true);
       }
 
       await upgradeLocalSupplierLedger(storedProf.id);
@@ -463,11 +461,6 @@ export function App() {
     setDevices([device]);
     setIsAuthModalOpen(false);
 
-    // If profile has no 6-digit PIN yet, trigger creation
-    if (!newProfile.pinHash) {
-      setIsCreatePinOpen(true);
-    }
-
     // Restore the encrypted snapshot if this device has the matching recovery phrase.
     let restoredOrMigrated = false;
     try {
@@ -532,10 +525,6 @@ export function App() {
     setProfile(offlineProfile);
     setDevices([dev]);
     setIsAuthModalOpen(false);
-
-    if (!offlineProfile.pinHash) {
-      setIsCreatePinOpen(true);
-    }
   };
 
   // Complete Logout / Sign Off Handler
