@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Lock,
-  Fingerprint,
   ShieldCheck,
   HelpCircle,
   CheckCircle2,
@@ -76,12 +75,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({
   const handleBackspace = () => {
     setErrorMsg('');
     setPin((prev) => prev.slice(0, -1));
-  };
-
-  const handleBiometricSimulate = () => {
-    if (profile.isBiometricEnabled) {
-      onUnlock();
-    }
   };
 
   // Verify Security Answer
@@ -192,24 +185,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({
               </button>
             ))}
 
-            {/* Biometric Button */}
-            {profile.isBiometricEnabled ? (
-              <button
-                onClick={handleBiometricSimulate}
-                className="h-13 sm:h-14 rounded-2xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 flex items-center justify-center transition active:scale-95"
-                title="Fingerprint / Face Unlock"
-              >
-                <Fingerprint className="w-6 h-6 text-emerald-400" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setPin('')}
-                className="h-13 sm:h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-400 flex items-center justify-center border border-slate-800 transition active:scale-95"
-                title="Clear"
-              >
-                C
-              </button>
-            )}
+            {/* Clear Button */}
+            <button
+              onClick={() => setPin('')}
+              className="h-13 sm:h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-400 flex items-center justify-center border border-slate-800 transition active:scale-95"
+              title="Clear"
+            >
+              C
+            </button>
 
             <button
               onClick={() => handleDigit('0')}
