@@ -129,12 +129,23 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
   for (let i = 0; i < filtered.length; i++) {
     const entry = filtered[i];
 
-    if (entry.type === 'credit') {
-      totalCredit += entry.amount;
-      runningBalance -= entry.amount;
+    if (party.type === 'customer') {
+      if (entry.type === 'credit') {
+        totalCredit += entry.amount;
+        runningBalance -= entry.amount;
+      } else {
+        totalDebit += entry.amount;
+        runningBalance += entry.amount;
+      }
     } else {
-      totalDebit += entry.amount;
-      runningBalance += entry.amount;
+      // Supplier: credit is Udhar Saman Liya (increases debt), debit is Jama Kiya (decreases debt)
+      if (entry.type === 'credit') {
+        totalCredit += entry.amount;
+        runningBalance += entry.amount;
+      } else {
+        totalDebit += entry.amount;
+        runningBalance -= entry.amount;
+      }
     }
 
     // Check page overflow

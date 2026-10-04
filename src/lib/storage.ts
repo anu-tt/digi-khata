@@ -340,12 +340,12 @@ export function calculatePartyBalance(
       status = 'barabar'; // Hisab Barabar
     }
   } else {
-    // For Supplier: Debit (purchase / udhaar liya) increases payable; Credit (payment) reduces it.
-    netBalance = Math.round((totalDebit - totalCredit) * 100) / 100;
+    // For Supplier: Credit (Udhar Saman Liya) increases payable (you are in debt); Debit (Jama Kiya) reduces payable.
+    netBalance = Math.round((totalCredit - totalDebit) * 100) / 100;
     if (netBalance > 0) {
-      status = 'dena_hai'; // Aapko Dena Hai
+      status = 'dena_hai'; // Aapko Dena Hai (You are in debt to supplier -> Red)
     } else if (netBalance < 0) {
-      status = 'lena_hai'; // Aapko Lena Hai (advance paid)
+      status = 'lena_hai'; // Aapko Lena Hai (Advance paid -> Green)
     } else {
       status = 'barabar'; // Hisab Barabar
     }

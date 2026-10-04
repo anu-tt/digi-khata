@@ -253,7 +253,8 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </div>
         ) : (
           filteredEntries.map((e) => {
-            const isJama = e.type === 'credit';
+            const isCredit = e.type === 'credit';
+            const isGreen = isCustomer ? isCredit : !isCredit;
             return (
               <div
                 key={e.id}
@@ -263,10 +264,10 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                      isJama ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      isGreen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                     }`}
                   >
-                    {isJama ? (
+                    {isGreen ? (
                       <ArrowDownLeft className="w-4 h-4 text-emerald-700" />
                     ) : (
                       <ArrowUpRight className="w-4 h-4 text-rose-700" />
@@ -274,7 +275,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <span>{e.description || (isCustomer ? (isJama ? 'Jama Mila' : 'Udhaar Diya') : (isJama ? 'Jama Kiya' : 'Udhar Saman Liya'))}</span>
+                      <span>{e.description || (isCustomer ? (isCredit ? 'Jama Mila' : 'Udhaar Diya') : (isCredit ? 'Udhar Saman Liya' : 'Jama Kiya'))}</span>
                       {e.attachments && e.attachments.length > 0 && (
                         <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
                           <ImageIcon className="w-2.5 h-2.5" />
@@ -291,13 +292,13 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                 <div className="text-right">
                   <div
                     className={`text-base font-extrabold ${
-                      isJama ? 'text-emerald-700' : 'text-rose-700'
+                      isGreen ? 'text-emerald-700' : 'text-rose-700'
                     }`}
                   >
-                    {isCustomer ? (isJama ? '+' : '-') : (isJama ? '-' : '+')} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {isGreen ? '+' : '-'} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[10px] font-semibold text-slate-400">
-                    {isCustomer ? (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)') : (isJama ? 'Jama Kiya (Credit)' : 'Udhar Saman (Debit)')}
+                    {isCustomer ? (isCredit ? 'Jama (Credit)' : 'Udhaar (Debit)') : (isCredit ? 'Udhar Saman (Credit)' : 'Jama Kiya (Debit)')}
                   </div>
                 </div>
               </div>
