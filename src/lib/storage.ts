@@ -98,6 +98,22 @@ export async function getStoredProfile(): Promise<UserProfile | null> {
   });
 }
 
+export async function getStoredProfileByEmail(email: string): Promise<UserProfile | null> {
+  const db = await getDB();
+  const cleanEmail = email.trim().toLowerCase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('profile', 'readonly');
+    const store = tx.objectStore('profile');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const list = req.result as UserProfile[];
+      const found = list.find((p) => p.email && p.email.trim().toLowerCase() === cleanEmail);
+      resolve(found || null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function saveStoredProfile(profile: UserProfile): Promise<void> {
   await performTx('profile', 'readwrite', (store) => store.put(profile));
 }

@@ -124,12 +124,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (newPassword && newPassword.length < 4) {
-      setPasswordError('Password kam se kam 4 ank ka hona chahiye.');
+    if (newPassword && newPassword.length < 6) {
+      setPasswordError('Password kam se kam 6 ank ka hona chahiye.');
       return;
     }
     if (newPassword && newPassword !== confirmNewPassword) {
@@ -137,23 +137,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return;
     }
 
-    onUpdateProfile({
-      name: name.trim(),
-      businessName: businessName.trim() || undefined,
-      address: address.trim() || undefined,
-    });
+    try {
+      let passwordUpdates: Partial<UserProfile> = {};
+      if (newPassword) {
+        const salt = generateSalt();
+        const pHash = await hashPIN(newPassword, salt);
+        passwordUpdates = {
+          passwordHash: pHash,
+          passwordSalt: salt,
+        };
+      }
 
-    if (newPassword) {
-      setPasswordSuccess(true);
-      setPasswordError('');
-      setTimeout(() => {
-        setPasswordSuccess(false);
-        setNewPassword('');
-        setConfirmNewPassword('');
+      onUpdateProfile({
+        name: name.trim(),
+        businessName: businessName.trim() || undefined,
+        address: address.trim() || undefined,
+        ...passwordUpdates,
+      });
+
+      if (newPassword) {
+        setPasswordSuccess(true);
+        setPasswordError('');
+        setTimeout(() => {
+          setPasswordSuccess(false);
+          setNewPassword('');
+          setConfirmNewPassword('');
+          setActiveSection('menu');
+        }, 800);
+      } else {
         setActiveSection('menu');
-      }, 800);
-    } else {
-      setActiveSection('menu');
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || 'Password update karne mein samasya aayi.');
     }
   };
 

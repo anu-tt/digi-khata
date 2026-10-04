@@ -177,7 +177,7 @@ export function App() {
       let storedProf = await getStoredProfile();
 
       // If not in local IndexedDB, check if an authenticated Firebase session exists
-      if (!storedProf && auth.currentUser) {
+      if (!storedProf && auth.currentUser && !isAuthModalOpen) {
         try {
           const cloudProf = await getUserProfileFromFirestore(auth.currentUser.uid);
           if (cloudProf) {
@@ -273,7 +273,7 @@ export function App() {
     let isSubscribed = true;
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (!isSubscribed) return;
-      if (fbUser && fbUser.emailVerified) {
+      if (fbUser && fbUser.emailVerified && !isAuthModalOpen) {
         const stored = await getStoredProfile();
         if (!stored || stored.id !== fbUser.uid) {
           try {

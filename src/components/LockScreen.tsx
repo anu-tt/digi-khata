@@ -48,7 +48,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({
       setIsVerifying(true);
       if (!profile.pinHash || !profile.pinSalt) {
         setIsVerifying(false);
-        onUnlock();
+        setErrorMsg('Passcode / PIN set nahi hai. Kripya app dobara open karein.');
+        setPin('');
         return;
       }
 
@@ -93,9 +94,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     }
 
     if (!profile.securityAnswerHash || !profile.pinSalt) {
-      // Fallback if security answer was not pre-set (allows recovery through account confirmation)
-      setIsAnswerVerified(true);
-      setMode('set_new_pin');
+      setRecoveryError('Security question configure nahi hai. Kripya apne Google account se login karein.');
       return;
     }
 
