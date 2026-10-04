@@ -309,7 +309,7 @@ export const DesktopKhataView: React.FC<DesktopKhataViewProps> = ({
                                   : 'bg-rose-100 text-rose-800 border border-rose-200'
                               }`}
                             >
-                              {isSupplier ? (isJama ? 'Payment (Credit)' : 'Purchase (Debit)') : (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)')}
+                              {isSupplier ? (isJama ? 'Jama Kiya (Credit)' : 'Udhar Saman (Debit)') : (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)')}
                             </span>
                           </td>
                           <td

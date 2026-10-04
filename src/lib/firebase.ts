@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signOut as fbSignOut,
+  onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -34,16 +35,28 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 // 2. Test Connection on Boot (as mandated by Firebase guidelines)
-export async function testFirebaseConnection() {
+export async function testFirebaseConnection(): Promise<boolean> {
+  if (typeof window === 'undefined' || !navigator.onLine) {
+    return false;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is currently offline or unreachable.');
+    return true;
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    const code = error?.code;
+    if (code === 'unavailable' || msg.includes('the client is offline') || msg.includes('unavailable')) {
+      console.warn('Firebase client is currently operating in offline mode.');
     }
+    return false;
   }
 }
-testFirebaseConnection();
+
+if (typeof window !== 'undefined') {
+  window.setTimeout(() => {
+    testFirebaseConnection().catch(() => {});
+  }, 1000);
+}
 
 // 3. Error Handler conforming to FirestoreErrorInfo standard
 export enum OperationType {
@@ -122,6 +135,8 @@ export async function createEmailPasswordAccount(email: string, password: string
 export async function logOutFirebase(): Promise<void> {
   await fbSignOut(auth);
 }
+
+export { onAuthStateChanged };
 
 // 5. Firestore User Profile CRUD
 export async function saveUserProfileToFirestore(profile: UserProfile): Promise<void> {

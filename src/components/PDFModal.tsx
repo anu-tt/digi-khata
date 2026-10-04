@@ -285,7 +285,7 @@ export const PDFModal: React.FC<PDFModalProps> = ({
                   filterType === 'credit' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600'
                 }`}
               >
-                Sirf Jama
+                {party?.type === 'supplier' ? 'Sirf Jama Kiya' : 'Sirf Jama'}
               </button>
               <button
                 type="button"
@@ -294,7 +294,7 @@ export const PDFModal: React.FC<PDFModalProps> = ({
                   filterType === 'debit' ? 'bg-white text-rose-700 shadow-xs' : 'text-slate-600'
                 }`}
               >
-                Sirf Udhaar
+                {party?.type === 'supplier' ? 'Sirf Udhar Saman' : 'Sirf Udhaar'}
               </button>
             </div>
           </div>

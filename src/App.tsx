@@ -5,6 +5,7 @@ import {
   PlusCircle,
   Bell,
   Settings as SettingsIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { AppLayout } from './components/AppLayout';
 import { DesktopSidebar } from './components/DesktopSidebar';
@@ -25,6 +26,7 @@ import { CreatePinModal } from './components/CreatePinModal';
 import { DeleteAccountModal } from './components/DeleteAccountModal';
 import { WebAdminPortal } from './components/WebAdminPortal';
 import { ActionToast, ToastMessage } from './components/ActionToast';
+import { TytanDoorLogo } from './components/TytanDoorLogo';
 
 import {
   UserProfile,
@@ -70,12 +72,14 @@ import {
 
 import {
   saveUserProfileToFirestore,
+  getUserProfileFromFirestore,
   fetchUserFirestoreData,
   findLegacyUserIdsByEmail,
   saveEncryptedVaultToFirestore,
   getEncryptedVaultFromFirestore,
   deleteLegacyFirestoreAccount,
   auth,
+  onAuthStateChanged,
   deleteAllUserFirestoreData,
   logOutFirebase,
 } from './lib/firebase';
@@ -121,6 +125,7 @@ export function App() {
   const [partySummaries, setPartySummaries] = useState<Map<string, PartyBalanceSummary>>(new Map());
 
   // Security & App Lock State (6-Digit PIN)
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isCreatePinOpen, setIsCreatePinOpen] = useState<boolean>(false);
@@ -169,9 +174,24 @@ export function App() {
   // 1. Initial Load from Local Database & Firestore Sync
   const reloadData = useCallback(async () => {
     try {
-      const storedProf = await getStoredProfile();
+      let storedProf = await getStoredProfile();
+
+      // If not in local IndexedDB, check if an authenticated Firebase session exists
+      if (!storedProf && auth.currentUser) {
+        try {
+          const cloudProf = await getUserProfileFromFirestore(auth.currentUser.uid);
+          if (cloudProf) {
+            await saveStoredProfile(cloudProf);
+            storedProf = cloudProf;
+          }
+        } catch (fetchErr) {
+          console.warn('Could not fetch cloud profile during boot:', fetchErr);
+        }
+      }
+
       if (!storedProf) {
         setIsAuthModalOpen(true);
+        setIsInitializing(false);
         return;
       }
 
@@ -188,6 +208,7 @@ export function App() {
       await saveStoredProfile(storedProf);
 
       setProfile(storedProf);
+      setIsAuthModalOpen(false);
 
       // Check 6-digit PIN on app opening: if PIN set, lock screen activates immediately!
       if (storedProf.pinHash) {
@@ -242,12 +263,39 @@ export function App() {
       setDashboardStats(calculateDashboardStats(pList, eList));
     } catch (err) {
       console.error('Error loading local khata database:', err);
+      setIsAuthModalOpen(true);
+    } finally {
+      setIsInitializing(false);
     }
   }, [isOnline]);
 
   useEffect(() => {
+    let isSubscribed = true;
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!isSubscribed) return;
+      if (fbUser && fbUser.emailVerified) {
+        const stored = await getStoredProfile();
+        if (!stored || stored.id !== fbUser.uid) {
+          try {
+            const cloudProf = await getUserProfileFromFirestore(fbUser.uid);
+            if (cloudProf) {
+              await saveStoredProfile(cloudProf);
+              await reloadData();
+            }
+          } catch (e) {
+            console.warn('Auth state sync notice:', e);
+          }
+        }
+      }
+    });
+
     reloadData();
     requestPersistentStorage().catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+      unsubscribe();
+    };
   }, [reloadData]);
 
   useEffect(() => {
@@ -753,6 +801,19 @@ export function App() {
       {/* 1. ADMIN ROUTE: Rendered ONLY if URL matches /ad-min */}
       {isAdminRoute ? (
         <WebAdminPortal onBackToApp={handleExitAdmin} />
+      ) : isInitializing ? (
+        /* Smooth Security Preloader - Prevents unauthenticated dashboard flash */
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-slate-900 text-white min-h-[60vh]">
+          <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-4 shadow-xl border border-white/20 animate-pulse">
+            <TytanDoorLogo variant="icon" size="lg" lightBackground={false} />
+          </div>
+          <h2 className="text-xl font-bold text-white tracking-tight">Digital Khata</h2>
+          <p className="text-xs text-emerald-400 font-medium mt-1">Simple & Secure Business Ledger</p>
+          <div className="flex items-center gap-2 mt-6 px-4 py-2 rounded-full bg-slate-800/80 border border-emerald-500/20 text-xs text-emerald-100 shadow-sm">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+            <span>Surakshit khata load ho raha hai...</span>
+          </div>
+        </div>
       ) : isAuthModalOpen ? (
         <AuthModal
           isOpen={isAuthModalOpen}
@@ -1019,7 +1080,10 @@ export function App() {
                   {/* Floating Quick Action */}
                   <button
                     onClick={() => {
-                      setAddEntryPartyId(activeParty?.id);
+                      const fallbackParty = activeParty?.id || (activeTab === 'suppliers' || activeKhataType === 'supplier'
+                        ? parties.find(p => p.type === 'supplier')?.id
+                        : undefined);
+                      setAddEntryPartyId(fallbackParty);
                       setIsAddEntryOpen(true);
                     }}
                     className="w-12 h-12 -mt-5 rounded-2xl bg-gradient-to-tr from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 text-white shadow-lg flex items-center justify-center transition active:scale-95 border-2 border-white"
@@ -1096,6 +1160,7 @@ export function App() {
       parties={parties}
       defaultPartyId={addEntryPartyId}
       defaultType={addEntryDefaultType}
+      defaultPartyType={activeParty?.type || (activeTab === 'suppliers' ? 'supplier' : activeKhataType)}
       onClose={() => setIsAddEntryOpen(false)}
       onSave={handleSaveEntry}
     />

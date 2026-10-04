@@ -66,8 +66,8 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
 
   const net = summary.netBalance;
   const isCustomer = party.type === 'customer';
-  const debitLabel = isCustomer ? 'Udhaar Diya (Debit)' : 'Maal Kharida (Debit)';
-  const creditLabel = isCustomer ? 'Jama Mila (Credit)' : 'Payment Diya (Credit)';
+  const debitLabel = isCustomer ? 'Udhaar Diya (Debit)' : 'Udhar Saman Liya (Debit)';
+  const creditLabel = isCustomer ? 'Jama Mila (Credit)' : 'Jama Kiya (Credit)';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-slate-50 text-slate-800 relative overflow-hidden">
@@ -198,8 +198,8 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
           </div>
 
           <div className="mt-2 pt-2 border-t border-white/10 flex justify-between text-[11px] text-emerald-100">
-            <div>Total Jama (+): ₹{summary.totalCredit.toLocaleString('en-IN')}</div>
-            <div>Total Udhaar (-): ₹{summary.totalDebit.toLocaleString('en-IN')}</div>
+            <div>{isCustomer ? 'Total Jama Mila (+)' : 'Total Jama Kiya (-)'}: ₹{summary.totalCredit.toLocaleString('en-IN')}</div>
+            <div>{isCustomer ? 'Total Udhaar Diya (-)' : 'Total Udhar Saman Liya (+)'}: ₹{summary.totalDebit.toLocaleString('en-IN')}</div>
           </div>
         </div>
       </div>
@@ -228,13 +228,13 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
             onClick={() => setTypeFilter('credit')}
             className={`px-2 py-1 rounded-md transition ${typeFilter === 'credit' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600'}`}
           >
-            Jama
+            {isCustomer ? 'Jama Mila' : 'Jama Kiya'}
           </button>
           <button
             onClick={() => setTypeFilter('debit')}
             className={`px-2 py-1 rounded-md transition ${typeFilter === 'debit' ? 'bg-white text-rose-700 shadow-xs' : 'text-slate-600'}`}
           >
-            Udhaar
+            {isCustomer ? 'Udhaar Diya' : 'Udhar Saman Liya'}
           </button>
         </div>
       </div>
@@ -248,7 +248,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
             </div>
             <h3 className="text-sm font-bold text-slate-800">Abhi koi entry nahi hai</h3>
             <p className="text-xs text-slate-500 mt-1 max-w-[220px] mx-auto">
-              Neeche diye gaye buttons se Udhaar ya Jama ki pehli entry karein.
+              Neeche diye gaye buttons se {isCustomer ? 'Udhaar Diya ya Jama Mila' : 'Udhar Saman Liya ya Jama Kiya'} ki pehli entry karein.
             </p>
           </div>
         ) : (
@@ -274,7 +274,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <span>{e.description || (isCustomer ? (isJama ? 'Jama Mila' : 'Udhaar Diya') : (isJama ? 'Payment Diya' : 'Maal Kharida'))}</span>
+                      <span>{e.description || (isCustomer ? (isJama ? 'Jama Mila' : 'Udhaar Diya') : (isJama ? 'Jama Kiya' : 'Udhar Saman Liya'))}</span>
                       {e.attachments && e.attachments.length > 0 && (
                         <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
                           <ImageIcon className="w-2.5 h-2.5" />
@@ -297,7 +297,7 @@ export const PartyDetail: React.FC<PartyDetailProps> = ({
                     {isCustomer ? (isJama ? '+' : '-') : (isJama ? '-' : '+')} ₹{e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[10px] font-semibold text-slate-400">
-                    {isCustomer ? (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)') : (isJama ? 'Payment (Credit)' : 'Purchase (Debit)')}
+                    {isCustomer ? (isJama ? 'Jama (Credit)' : 'Udhaar (Debit)') : (isJama ? 'Jama Kiya (Credit)' : 'Udhar Saman (Debit)')}
                   </div>
                 </div>
               </div>

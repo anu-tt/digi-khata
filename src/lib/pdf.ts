@@ -116,8 +116,8 @@ export function generateKhataStatementPDF(options: PDFExportOptions): jsPDF {
 
   doc.text('Date', 18, yPos + 6);
   doc.text('Description / Vivran', 45, yPos + 6);
-  doc.text(party.type === 'supplier' ? 'Payment (Credit)' : 'Jama (Credit)', 115, yPos + 6, { align: 'right' });
-  doc.text(party.type === 'supplier' ? 'Purchase (Debit)' : 'Udhaar (Debit)', 152, yPos + 6, { align: 'right' });
+  doc.text(party.type === 'supplier' ? 'Jama Kiya (Credit)' : 'Jama (Credit)', 115, yPos + 6, { align: 'right' });
+  doc.text(party.type === 'supplier' ? 'Udhar Saman (Debit)' : 'Udhaar (Debit)', 152, yPos + 6, { align: 'right' });
   doc.text('Balance', pageWidth - 18, yPos + 6, { align: 'right' });
 
   yPos += 13;
