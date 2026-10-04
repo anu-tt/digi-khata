@@ -600,3 +600,13 @@ export async function wipeLocalDatabase(): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+export async function resetEntireDatabase(): Promise<void> {
+  try {
+    await wipeLocalDatabase();
+  } catch {}
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {}
+}

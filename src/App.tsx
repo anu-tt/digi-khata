@@ -176,13 +176,32 @@ export function App() {
     try {
       let storedProf = await getStoredProfile();
 
-      // If not in local IndexedDB, check if an authenticated Firebase session exists
-      if (!storedProf && auth.currentUser && !isAuthModalOpen) {
+      // If authenticated in Firebase, fetch cloud profile and intelligently merge with local profile
+      if (auth.currentUser && isOnline) {
         try {
           const cloudProf = await getUserProfileFromFirestore(auth.currentUser.uid);
           if (cloudProf) {
-            await saveStoredProfile(cloudProf);
-            storedProf = cloudProf;
+            storedProf = {
+              ...(cloudProf || {}),
+              ...(storedProf || {}),
+              name: storedProf?.name || cloudProf?.name || '',
+              businessName: storedProf?.businessName || cloudProf?.businessName,
+              address: storedProf?.address || cloudProf?.address,
+              phone: storedProf?.phone || cloudProf?.phone,
+              avatar: storedProf?.avatar || cloudProf?.avatar,
+              pinHash: storedProf?.pinHash || cloudProf?.pinHash,
+              pinSalt: storedProf?.pinSalt || cloudProf?.pinSalt,
+              securityQuestion: storedProf?.securityQuestion || cloudProf?.securityQuestion,
+              securityAnswerHash: storedProf?.securityAnswerHash || cloudProf?.securityAnswerHash,
+              passwordHash: storedProf?.passwordHash || cloudProf?.passwordHash,
+              passwordSalt: storedProf?.passwordSalt || cloudProf?.passwordSalt,
+              id: auth.currentUser.uid,
+              email: auth.currentUser.email || storedProf?.email || cloudProf?.email,
+            };
+            await saveStoredProfile(storedProf);
+            try {
+              await saveUserProfileToFirestore(storedProf);
+            } catch {}
           }
         } catch (fetchErr) {
           console.warn('Could not fetch cloud profile during boot:', fetchErr);
