@@ -98,6 +98,22 @@ export async function getStoredProfile(): Promise<UserProfile | null> {
   });
 }
 
+export async function getStoredProfileByEmail(email: string): Promise<UserProfile | null> {
+  const db = await getDB();
+  const cleanEmail = email.trim().toLowerCase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('profile', 'readonly');
+    const store = tx.objectStore('profile');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const list = req.result as UserProfile[];
+      const found = list.find((p) => p.email && p.email.trim().toLowerCase() === cleanEmail);
+      resolve(found || null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function saveStoredProfile(profile: UserProfile): Promise<void> {
   await performTx('profile', 'readwrite', (store) => store.put(profile));
 }
@@ -324,12 +340,12 @@ export function calculatePartyBalance(
       status = 'barabar'; // Hisab Barabar
     }
   } else {
-    // For Supplier: Debit (purchase / udhaar liya) increases payable; Credit (payment) reduces it.
-    netBalance = Math.round((totalDebit - totalCredit) * 100) / 100;
+    // For Supplier: Credit (Udhar Saman Liya) increases payable (you are in debt); Debit (Jama Kiya) reduces payable.
+    netBalance = Math.round((totalCredit - totalDebit) * 100) / 100;
     if (netBalance > 0) {
-      status = 'dena_hai'; // Aapko Dena Hai
+      status = 'dena_hai'; // Aapko Dena Hai (You are in debt to supplier -> Red)
     } else if (netBalance < 0) {
-      status = 'lena_hai'; // Aapko Lena Hai (advance paid)
+      status = 'lena_hai'; // Aapko Lena Hai (Advance paid -> Green)
     } else {
       status = 'barabar'; // Hisab Barabar
     }
@@ -583,4 +599,14 @@ export async function wipeLocalDatabase(): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+export async function resetEntireDatabase(): Promise<void> {
+  try {
+    await wipeLocalDatabase();
+  } catch {}
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {}
 }

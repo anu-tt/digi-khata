@@ -6,6 +6,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Health-check / connection probe
+    match /test/connection {
+      allow get: if true;
+    }
+
     // Helper functions
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;

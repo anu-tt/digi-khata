@@ -17,6 +17,8 @@ import {
   getUserProfileFromFirestore,
 } from '../lib/firebase';
 import { UserProfile, AuthDevice } from '../types/khata';
+import { generateSalt, hashPIN } from '../lib/crypto';
+import { getStoredProfileByEmail, getStoredProfile, saveStoredProfile } from '../lib/storage';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import { PWAInstallButton } from './PWAInstallButton';
 import { TytanDoorLogo } from './TytanDoorLogo';
@@ -85,23 +87,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const userName = fbUser.displayName || name.trim() || userEmail.split('@')[0];
       const userAvatar = fbUser.photoURL || undefined;
 
-      let existingProf: UserProfile | null = null;
+      const localStored = await getStoredProfile();
+      const existingByEmail = await getStoredProfileByEmail(userEmail);
+      let cloudProf: UserProfile | null = null;
       try {
-        existingProf = await getUserProfileFromFirestore(userId);
+        cloudProf = await getUserProfileFromFirestore(userId);
       } catch {}
 
-      const profile: UserProfile = existingProf || {
+      const baseProfile = cloudProf || existingByEmail || localStored;
+
+      const profile: UserProfile = {
         id: userId,
         email: userEmail,
-        name: userName,
-        businessName: businessName.trim() || undefined,
-        avatar: userAvatar,
-        isBiometricEnabled: false,
-        createdAt: new Date().toISOString(),
+        name: baseProfile?.name || userName,
+        businessName: baseProfile?.businessName || businessName.trim() || undefined,
+        address: baseProfile?.address || undefined,
+        avatar: userAvatar || baseProfile?.avatar,
+        pinHash: baseProfile?.pinHash,
+        pinSalt: baseProfile?.pinSalt,
+        securityQuestion: baseProfile?.securityQuestion,
+        securityAnswerHash: baseProfile?.securityAnswerHash,
+        passwordHash: baseProfile?.passwordHash,
+        passwordSalt: baseProfile?.passwordSalt,
+        isBiometricEnabled: baseProfile?.isBiometricEnabled || false,
+        createdAt: baseProfile?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       try {
+        await saveStoredProfile(profile);
         await saveUserProfileToFirestore(profile);
       } catch {}
 
@@ -136,6 +150,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // 3. Password Submit / Account Login or Creation
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+
     if (!password || password.length < 6) {
       setErrorMsg('Password mein kam se kam 6 characters hone chahiye.');
       return;
@@ -146,8 +162,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Account creation is completed from the profile form.
+    // Account creation: Block if email is already registered!
     if (isNewAccount) {
+      const existing = await getStoredProfileByEmail(cleanEmail);
+      if (existing) {
+        setErrorMsg('Is email par pehle se account bana hua hai! Kripya sahi password ke sath login karein.');
+        setIsNewAccount(false);
+        return;
+      }
       setMode('profile');
       return;
     }
@@ -156,6 +178,73 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg('');
 
     try {
+      const existingLocal = await getStoredProfileByEmail(cleanEmail);
+
+      // CRITICAL: If an account exists with this email, strictly check the password!
+      if (existingLocal?.passwordHash && existingLocal?.passwordSalt) {
+        const enteredHash = await hashPIN(password, existingLocal.passwordSalt);
+        if (enteredHash !== existingLocal.passwordHash) {
+          setErrorMsg('Galat Password! Kripya sahi password dalein.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Check Firebase email/password if available
+      let fbUser: any = null;
+      try {
+        fbUser = await signInWithEmailPassword(cleanEmail, password);
+      } catch (fbErr: any) {
+        const code = fbErr?.code || '';
+        if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+          setErrorMsg('Galat Password! Kripya sahi password dalein.');
+          setLoading(false);
+          return;
+        }
+        if (code === 'auth/user-not-found' && !existingLocal) {
+          setErrorMsg('Is email par koi account nahi mila. Naya account banane ke liye "Sign up" par click karein.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If neither local profile exists nor Firebase user exists, do not blindly open!
+      if (!existingLocal && !fbUser) {
+        setErrorMsg('Is email par koi account nahi mila. Naya account banane ke liye "Sign up" karein.');
+        setLoading(false);
+        return;
+      }
+
+      const userId = fbUser?.uid || existingLocal?.id || ('usr_' + Math.random().toString(36).substring(2, 10));
+      let cloudProf: UserProfile | null = null;
+      if (fbUser) {
+        try {
+          cloudProf = await getUserProfileFromFirestore(userId);
+        } catch {}
+      }
+
+      let profile: UserProfile = existingLocal || cloudProf || {
+        id: userId,
+        email: cleanEmail,
+        name: name.trim() || cleanEmail.split('@')[0],
+        businessName: businessName.trim() || undefined,
+        isBiometricEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // If account didn't have password salt yet, lock it to this verified password
+      if (!profile.passwordHash) {
+        const salt = generateSalt();
+        profile.passwordSalt = salt;
+        profile.passwordHash = await hashPIN(password, salt);
+      }
+
+      try {
+        await saveStoredProfile(profile);
+        await saveUserProfileToFirestore(profile);
+      } catch {}
+
       const deviceName = `${
         navigator.userAgent.includes('Android')
           ? 'Android'
@@ -168,24 +257,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         : navigator.userAgent.includes('Android')
         ? 'android'
         : 'web';
-
-      const fbUser = await signInWithEmailPassword(email.trim().toLowerCase(), password);
-      const userId = fbUser.uid;
-      const existingProf = await getUserProfileFromFirestore(userId);
-
-      const profile: UserProfile = existingProf || {
-        id: userId,
-        email: email.trim().toLowerCase(),
-        name: name.trim() || email.split('@')[0],
-        businessName: businessName.trim() || undefined,
-        isBiometricEnabled: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      try {
-        await saveUserProfileToFirestore(profile);
-      } catch {}
 
       const device: AuthDevice = {
         id: getLocalDeviceId(),
@@ -207,6 +278,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // 4. Complete Profile Setup (New Account)
   const handleCompleteSetup = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+
     if (!name.trim()) {
       setErrorMsg('Kripya apna naam enter karein.');
       return;
@@ -217,55 +290,84 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const deviceName = `${
-      navigator.userAgent.includes('Android')
-        ? 'Android'
-        : navigator.userAgent.includes('iPhone')
-        ? 'iPhone'
-        : 'Web'
-    } Device`;
-    const platform = navigator.userAgent.includes('iPhone')
-      ? 'ios'
-      : navigator.userAgent.includes('Android')
-      ? 'android'
-      : 'web';
-
-    let fbUser;
-    try {
-      fbUser = await createEmailPasswordAccount(email.trim().toLowerCase(), password);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Account create nahi ho paya. Email ya password check karein.');
+    // Double check email uniqueness before creating
+    const existing = await getStoredProfileByEmail(cleanEmail);
+    if (existing) {
+      setErrorMsg('Is email par pehle se account bana hua hai! Kripya sahi password ke sath login karein.');
+      setMode('password');
+      setIsNewAccount(false);
       return;
     }
-    const userId = fbUser.uid;
 
-    const profile: UserProfile = {
-      id: userId,
-      email: email.trim().toLowerCase(),
-      name: name.trim(),
-      businessName: businessName.trim() || undefined,
-      address: address.trim() || undefined,
-      isBiometricEnabled: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    setLoading(true);
+    setErrorMsg('');
 
     try {
-      await saveUserProfileToFirestore(profile);
-    } catch (err) {
-      console.warn('Profile save warning:', err);
+      let fbUser: any = null;
+      try {
+        fbUser = await createEmailPasswordAccount(cleanEmail, password);
+      } catch (err: any) {
+        if (err?.code === 'auth/email-already-in-use' || err?.message?.includes('already-in-use')) {
+          setErrorMsg('Is email par pehle se account bana hua hai! Kripya login karein.');
+          setMode('password');
+          setIsNewAccount(false);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const userId = fbUser?.uid || ('usr_' + Math.random().toString(36).substring(2, 10));
+      const salt = generateSalt();
+      const passHash = await hashPIN(password, salt);
+
+      const profile: UserProfile = {
+        id: userId,
+        email: cleanEmail,
+        name: name.trim(),
+        businessName: businessName.trim() || undefined,
+        address: address.trim() || undefined,
+        passwordHash: passHash,
+        passwordSalt: salt,
+        isBiometricEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        await saveStoredProfile(profile);
+        await saveUserProfileToFirestore(profile);
+      } catch (err) {
+        console.warn('Profile save warning:', err);
+      }
+
+      const deviceName = `${
+        navigator.userAgent.includes('Android')
+          ? 'Android'
+          : navigator.userAgent.includes('iPhone')
+          ? 'iPhone'
+          : 'Web'
+      } Device`;
+      const platform = navigator.userAgent.includes('iPhone')
+        ? 'ios'
+        : navigator.userAgent.includes('Android')
+        ? 'android'
+        : 'web';
+
+      const device: AuthDevice = {
+        id: getLocalDeviceId(),
+        name: deviceName,
+        platform: platform as any,
+        lastActive: new Date().toISOString(),
+        isCurrent: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      onSuccess(profile, device);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Account create nahi ho paya.');
+    } finally {
+      setLoading(false);
     }
-
-    const device: AuthDevice = {
-      id: getLocalDeviceId(),
-      name: deviceName,
-      platform: platform as any,
-      lastActive: new Date().toISOString(),
-      isCurrent: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    onSuccess(profile, device);
   };
 
   // 5. Offline Only setup

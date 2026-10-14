@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Lock,
-  Fingerprint,
   ShieldCheck,
   HelpCircle,
   CheckCircle2,
@@ -48,7 +47,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({
       setIsVerifying(true);
       if (!profile.pinHash || !profile.pinSalt) {
         setIsVerifying(false);
-        onUnlock();
+        setErrorMsg('Passcode / PIN set nahi hai. Kripya app dobara open karein.');
+        setPin('');
         return;
       }
 
@@ -77,12 +77,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     setPin((prev) => prev.slice(0, -1));
   };
 
-  const handleBiometricSimulate = () => {
-    if (profile.isBiometricEnabled) {
-      onUnlock();
-    }
-  };
-
   // Verify Security Answer
   const handleVerifyAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,9 +87,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     }
 
     if (!profile.securityAnswerHash || !profile.pinSalt) {
-      // Fallback if security answer was not pre-set (allows recovery through account confirmation)
-      setIsAnswerVerified(true);
-      setMode('set_new_pin');
+      setRecoveryError('Security question configure nahi hai. Kripya apne Google account se login karein.');
       return;
     }
 
@@ -193,24 +185,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({
               </button>
             ))}
 
-            {/* Biometric Button */}
-            {profile.isBiometricEnabled ? (
-              <button
-                onClick={handleBiometricSimulate}
-                className="h-13 sm:h-14 rounded-2xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 flex items-center justify-center transition active:scale-95"
-                title="Fingerprint / Face Unlock"
-              >
-                <Fingerprint className="w-6 h-6 text-emerald-400" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setPin('')}
-                className="h-13 sm:h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-400 flex items-center justify-center border border-slate-800 transition active:scale-95"
-                title="Clear"
-              >
-                C
-              </button>
-            )}
+            {/* Clear Button */}
+            <button
+              onClick={() => setPin('')}
+              className="h-13 sm:h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-400 flex items-center justify-center border border-slate-800 transition active:scale-95"
+              title="Clear"
+            >
+              C
+            </button>
 
             <button
               onClick={() => handleDigit('0')}

@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   RefreshCw,
   Building,
-  Fingerprint,
   ArrowLeft,
   Database,
   HelpCircle,
@@ -129,12 +128,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (newPassword && newPassword.length < 4) {
-      setPasswordError('Password kam se kam 4 ank ka hona chahiye.');
+    if (newPassword && newPassword.length < 6) {
+      setPasswordError('Password kam se kam 6 ank ka hona chahiye.');
       return;
     }
     if (newPassword && newPassword !== confirmNewPassword) {
@@ -142,23 +141,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return;
     }
 
-    onUpdateProfile({
-      name: name.trim(),
-      businessName: businessName.trim() || undefined,
-      address: address.trim() || undefined,
-    });
+    try {
+      let passwordUpdates: Partial<UserProfile> = {};
+      if (newPassword) {
+        const salt = generateSalt();
+        const pHash = await hashPIN(newPassword, salt);
+        passwordUpdates = {
+          passwordHash: pHash,
+          passwordSalt: salt,
+        };
+      }
 
-    if (newPassword) {
-      setPasswordSuccess(true);
-      setPasswordError('');
-      setTimeout(() => {
-        setPasswordSuccess(false);
-        setNewPassword('');
-        setConfirmNewPassword('');
+      onUpdateProfile({
+        name: name.trim(),
+        businessName: businessName.trim() || undefined,
+        address: address.trim() || undefined,
+        ...passwordUpdates,
+      });
+
+      if (newPassword) {
+        setPasswordSuccess(true);
+        setPasswordError('');
+        setTimeout(() => {
+          setPasswordSuccess(false);
+          setNewPassword('');
+          setConfirmNewPassword('');
+          setActiveSection('menu');
+        }, 800);
+      } else {
         setActiveSection('menu');
-      }, 800);
-    } else {
-      setActiveSection('menu');
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || 'Password update karne mein samasya aayi.');
     }
   };
 
@@ -211,12 +225,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       securityAnswerHash: undefined,
     });
     setActiveSection('menu');
-  };
-
-  const handleToggleBiometric = () => {
-    onUpdateProfile({
-      isBiometricEnabled: !profile.isBiometricEnabled,
-    });
   };
 
   const handleSyncNow = async () => {
@@ -559,22 +567,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* 3. Security & 6-Digit PIN + Security Question */}
         {activeSection === 'security' && (
           <div className="space-y-4">
-            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <Fingerprint className="w-5 h-5 text-emerald-700" />
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Biometric Unlock</div>
-                  <div className="text-[11px] text-slate-500">Fingerprint ya Face ID se kholne ke liye</div>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={profile.isBiometricEnabled}
-                onChange={handleToggleBiometric}
-                className="w-4 h-4 accent-emerald-700 cursor-pointer"
-              />
-            </div>
-
             <form onSubmit={handleSetPIN} className="space-y-3.5 p-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
               <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-emerald-700" />

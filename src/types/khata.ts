@@ -56,6 +56,8 @@ export interface UserProfile {
   avatar?: string;
   address?: string;
   recoveryPhrase?: string; // Local-only encryption key; never stored in the cloud profile
+  passwordHash?: string; // Salted cryptographic hash of user's password
+  passwordSalt?: string;
   pinHash?: string;
   pinSalt?: string;
   securityQuestion?: string;

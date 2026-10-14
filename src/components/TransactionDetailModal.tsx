@@ -34,7 +34,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const isJama = entry.type === 'credit';
   const isSupplier = party?.type === 'supplier';
   const entryLabel = isSupplier
-    ? (isJama ? 'Payment Diya (Credit)' : 'Maal Kharida (Debit)')
+    ? (isJama ? 'Jama Kiya (Credit)' : 'Udhar Saman Liya (Debit)')
     : (isJama ? 'Jama Mila (Credit)' : 'Udhaar Diya (Debit)');
 
   const handleDelete = () => {
@@ -83,7 +83,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           {/* Amount Card */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-center">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {isSupplier ? (isJama ? 'Supplier ko payment diya' : 'Supplier se maal kharida') : (isJama ? 'Aapko Mila (Jama)' : 'Aapne Diya (Udhaar)')}
+              {isSupplier ? (isJama ? 'Supplier ko jama kiya (Payment)' : 'Supplier se udhar saman liya') : (isJama ? 'Aapko Mila (Jama)' : 'Aapne Diya (Udhaar)')}
             </div>
             <div
               className={`text-3xl font-extrabold mt-1 tracking-tight ${

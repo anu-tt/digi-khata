@@ -16,6 +16,7 @@ interface AddEntryModalProps {
   parties: KhataParty[];
   defaultPartyId?: string;
   defaultType?: EntryType;
+  defaultPartyType?: 'customer' | 'supplier';
   onClose: () => void;
   onSave: (entryData: Omit<KhataEntry, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => void;
 }
@@ -25,10 +26,16 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
   parties,
   defaultPartyId,
   defaultType = 'credit',
+  defaultPartyType,
   onClose,
   onSave,
 }) => {
-  const [selectedPartyId, setSelectedPartyId] = useState(defaultPartyId || (parties[0]?.id || ''));
+  const initialPartyId =
+    defaultPartyId ||
+    (defaultPartyType ? parties.find((p) => p.type === defaultPartyType)?.id : undefined) ||
+    parties[0]?.id ||
+    '';
+  const [selectedPartyId, setSelectedPartyId] = useState(initialPartyId);
   const [entryType, setEntryType] = useState<EntryType>(defaultType);
   const [amountStr, setAmountStr] = useState('');
   const [description, setDescription] = useState('');
@@ -39,9 +46,16 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (defaultPartyId) setSelectedPartyId(defaultPartyId);
+    if (defaultPartyId) {
+      setSelectedPartyId(defaultPartyId);
+    } else if (defaultPartyType) {
+      const matched = parties.find((p) => p.type === defaultPartyType);
+      if (matched) setSelectedPartyId(matched.id);
+    } else if (parties[0]?.id) {
+      setSelectedPartyId(parties[0].id);
+    }
     if (defaultType) setEntryType(defaultType);
-  }, [defaultPartyId, defaultType]);
+  }, [defaultPartyId, defaultType, defaultPartyType, parties]);
 
   if (!isOpen) return null;
 
@@ -121,8 +135,8 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
 
   const selectedParty = parties.find((p) => p.id === selectedPartyId);
   const isSupplier = selectedParty?.type === 'supplier';
-  const debitLabel = isSupplier ? 'Maal Kharida (Debit)' : 'Udhaar Diya (Debit)';
-  const creditLabel = isSupplier ? 'Payment Diya (Credit)' : 'Jama Mila (Credit)';
+  const debitLabel = isSupplier ? 'Udhar Saman Liya (Debit)' : 'Udhaar Diya (Debit)';
+  const creditLabel = isSupplier ? 'Jama Kiya (Credit)' : 'Jama Mila (Credit)';
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -245,7 +259,7 @@ export const AddEntryModal: React.FC<AddEntryModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Kirana saman, Bill no 40, Cash payment..."
+              placeholder={isSupplier ? 'e.g. Saman ka bill, Maal kharida, Supplier payment...' : 'e.g. Kirana saman, Bill no 40, Cash payment...'}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white transition"
             />
           </div>
