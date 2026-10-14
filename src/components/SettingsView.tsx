@@ -35,6 +35,7 @@ interface SettingsViewProps {
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onManualSync: () => Promise<void>;
   onRestoreCloudVault: () => Promise<void>;
+  onSaveRecoveryKeyAndRestore: (recoveryPhrase: string) => Promise<void>;
   onExportLocalData: () => void;
   onDeleteAccount: () => void;
   onLogout: () => void;
@@ -46,11 +47,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateProfile,
   onManualSync,
   onRestoreCloudVault,
+  onSaveRecoveryKeyAndRestore,
   onExportLocalData,
   onDeleteAccount,
   onLogout,
 }) => {
-  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync' | 'help' | 'storage'>('menu');
+  const [activeSection, setActiveSection] = useState<'menu' | 'profile' | 'security' | 'sync' | 'help' | 'storage'>(
+    profile.recoveryPhrase ? 'menu' : 'sync'
+  );
   const [name, setName] = useState(profile.name);
   const [businessName, setBusinessName] = useState(profile.businessName || '');
   const [address, setAddress] = useState(profile.address || '');
@@ -119,6 +123,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Cloud restore
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [restoreMsg, setRestoreMsg] = useState('');
+  const [restoreError, setRestoreError] = useState(false);
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -230,11 +235,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleRestoreNow = async () => {
     setRestoreLoading(true);
     setRestoreMsg('');
+    setRestoreError(false);
     try {
       await onRestoreCloudVault();
       setRestoreMsg('Firebase Cloud se data safalta-purvak restore ho gaya!');
     } catch (err: any) {
       setRestoreMsg(err.message || 'Restore nahi ho paya. Details check karein.');
+      setRestoreError(true);
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const handleSaveRecoveryKey = async () => {
+    const recoveryPhrase = recoveryPhraseInput.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!recoveryPhrase) return;
+
+    setRestoreLoading(true);
+    setRestoreMsg('');
+    setRestoreError(false);
+    try {
+      await onSaveRecoveryKeyAndRestore(recoveryPhrase);
+      setRecoveryPhraseInput('');
+      setRestoreMsg('Cloud backup is restored on this browser.');
+    } catch (err: any) {
+      setRestoreMsg(err.message || 'Recovery key galat hai ya cloud backup restore nahi ho paya.');
+      setRestoreError(true);
     } finally {
       setRestoreLoading(false);
     }
@@ -659,7 +685,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-3">
               <div className="font-bold text-amber-950">Private cloud recovery key</div>
               <p className="text-amber-900 leading-relaxed">
-                Ledger backups are encrypted on this device before upload. Keep this key somewhere safe. Without it, cloud backups cannot be restored on another device.
+                Ledger backups are encrypted before upload. Use the same recovery key on each browser to restore the cloud backup. The key stays on your device and is never uploaded.
               </p>
               {profile.recoveryPhrase ? (
                 <>
@@ -677,6 +703,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </>
               ) : null}
               <label className="block font-semibold text-amber-950">Use a recovery key from another device</label>
+              <p className="text-amber-900 leading-relaxed">
+                On your other browser, open Settings → Sync and copy its recovery key. Paste it here to save the key and restore your cloud data.
+              </p>
               <input
                 value={recoveryPhraseInput}
                 onChange={(event) => setRecoveryPhraseInput(event.target.value)}
@@ -686,14 +715,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
               <button
                 type="button"
-                disabled={!recoveryPhraseInput.trim()}
-                onClick={() => {
-                  onUpdateProfile({ recoveryPhrase: recoveryPhraseInput.trim().replace(/\s+/g, ' ').toLowerCase() });
-                  setRecoveryPhraseInput('');
-                }}
+                disabled={!recoveryPhraseInput.trim() || restoreLoading}
+                onClick={handleSaveRecoveryKey}
                 className="px-3 py-2 rounded-lg bg-amber-700 text-white font-bold disabled:opacity-50"
               >
-                Save recovery key
+                {restoreLoading ? 'Saving key and restoring…' : 'Save key and restore cloud backup'}
               </button>
             </div>
             <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl text-xs space-y-1 shadow-sm">
@@ -713,7 +739,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             )}
 
             {restoreMsg && (
-              <div className="p-3 bg-blue-50 border border-blue-300 text-blue-900 text-xs rounded-xl font-semibold">
+              <div className={`p-3 border text-xs rounded-xl font-semibold ${restoreError ? 'bg-rose-50 border-rose-300 text-rose-900' : 'bg-blue-50 border-blue-300 text-blue-900'}`}>
                 {restoreMsg}
               </div>
             )}

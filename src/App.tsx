@@ -226,6 +226,11 @@ export function App() {
           }
         } catch (cloudErr) {
           console.warn('Could not pull initial Firestore data:', cloudErr);
+          setActiveTab('settings');
+          showToast({
+            type: 'error',
+            text: cloudErr instanceof Error ? cloudErr.message : 'Cloud backup restore nahi ho paya. Sync settings check karein.',
+          });
         }
       }
 
@@ -323,28 +328,50 @@ export function App() {
   };
 
   // 3. Cloud Restore
-  const handleRestoreCloudVault = async () => {
+  const handleRestoreCloudVault = async (
+    recoveryPhrase = profile?.recoveryPhrase || '',
+    onRecoveryKeyValidated?: () => Promise<void>
+  ) => {
     if (!profile || auth.currentUser?.uid !== profile.id) throw new Error('Cloud account mein sign in karein.');
     if (!isOnline) throw new Error('Internet nahi hai.');
 
     const encrypted = await getEncryptedVaultFromFirestore(profile.id);
     if (encrypted) {
-      const vault = await decryptData<UserDecryptedVault>(encrypted, profile.recoveryPhrase || '');
+      if (!recoveryPhrase) throw new Error('Dusre browser se recovery key paste karein.');
+      const vault = await decryptData<UserDecryptedVault>(encrypted, recoveryPhrase);
       if (vault.profile.id !== profile.id) throw new Error('Backup account mismatch.');
+      await onRecoveryKeyValidated?.();
       await importDecryptedVault(vault);
       await reloadData();
+      setSyncState('success');
       return;
     }
 
     // Import legacy plaintext Firestore data once, then replace it with ciphertext.
     const legacy = await fetchUserFirestoreData(profile.id);
     if (!legacy.parties.length && !legacy.entries.length) throw new Error('Cloud par koi backup nahi mila.');
+    await onRecoveryKeyValidated?.();
     for (const party of legacy.parties) await saveParty(party);
     for (const entry of upgradeSupplierEntryTypes(legacy.parties, legacy.entries)) await saveEntry(entry);
     const migratedVault = await exportLocalVault();
-    if (!migratedVault || !profile.recoveryPhrase) throw new Error('Cloud recovery key missing.');
-    await saveEncryptedVaultToFirestore(profile.id, await encryptData(migratedVault, profile.recoveryPhrase));
+    if (!migratedVault || !recoveryPhrase) throw new Error('Cloud recovery key missing.');
+    await saveEncryptedVaultToFirestore(profile.id, await encryptData(migratedVault, recoveryPhrase));
     await reloadData();
+    setSyncState('success');
+  };
+
+  const handleSaveRecoveryKeyAndRestore = async (recoveryPhrase: string) => {
+    if (!profile) throw new Error('Account mein sign in karein.');
+    const normalizedPhrase = recoveryPhrase.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!normalizedPhrase) throw new Error('Recovery key paste karein.');
+
+    const persistValidatedKey = async () => {
+      const updatedProfile = { ...profile, recoveryPhrase: normalizedPhrase, updatedAt: new Date().toISOString() };
+      await saveLocalRecoveryPhrase(updatedProfile.id, normalizedPhrase);
+      await saveStoredProfile(updatedProfile);
+      setProfile(updatedProfile);
+    };
+    await handleRestoreCloudVault(normalizedPhrase, persistValidatedKey);
   };
 
   // 4. Offline Decrypted JSON Export
@@ -445,6 +472,11 @@ export function App() {
       }
     } catch (e) {
       console.warn('Initial pull note:', e);
+      setActiveTab('settings');
+      showToast({
+        type: 'error',
+        text: e instanceof Error ? e.message : 'Cloud backup restore nahi ho paya. Sync settings check karein.',
+      });
     }
 
     setSyncState(!isOnline ? 'pending' : restoredOrMigrated ? 'success' : 'error');
@@ -824,6 +856,7 @@ export function App() {
                       if (!(await triggerSync())) throw new Error('Sync failed. Check the recovery key and connection.');
                     }}
                     onRestoreCloudVault={handleRestoreCloudVault}
+                    onSaveRecoveryKeyAndRestore={handleSaveRecoveryKeyAndRestore}
                     onExportLocalData={handleExportLocalData}
                     onDeleteAccount={() => {
                       setIsDeleteAccountOpen(true);
@@ -975,6 +1008,7 @@ export function App() {
                       if (!(await triggerSync())) throw new Error('Sync failed. Check the recovery key and connection.');
                     }}
                     onRestoreCloudVault={handleRestoreCloudVault}
+                    onSaveRecoveryKeyAndRestore={handleSaveRecoveryKeyAndRestore}
                     onExportLocalData={handleExportLocalData}
                     onDeleteAccount={() => {
                       setIsDeleteAccountOpen(true);
